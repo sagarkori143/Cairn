@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# secrets — the Anthropic key lives here and must never be committed
+.env
+.env.*
+!.env.example
+
+# next.js / build output
+.next/
+out/
+build/
+dist/
+release/
+
+# electron-builder output (the packaged .exe and its intermediates)
+app/dist/
+app/release/
+
+# local model cache — Whisper weights are downloaded, not committed
+app/models/
+.cache/
+
+# editor / tooling state
+.claude/
+.vscode/
+.idea/
+
+# os
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# vercel
+.vercel

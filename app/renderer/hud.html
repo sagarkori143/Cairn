@@ -1,0 +1,355 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Cairn</title>
+    <style>
+      :root {
+        --void: #08090d;
+        --surface: #101219;
+        --raised: #171a24;
+        --line: #232733;
+        --ink: #e9ebf2;
+        --muted: #8b90a3;
+        --faint: #5b6072;
+        --ember: #ff8f4c;
+        --moss: #35d6a0;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        color: var(--ink);
+        user-select: none;
+      }
+      #shell {
+        margin: 10px;
+        border-radius: 16px;
+        background: rgba(16, 18, 25, 0.86);
+        backdrop-filter: blur(22px) saturate(160%);
+        border: 1px solid rgba(233, 235, 242, 0.1);
+        box-shadow: 0 22px 60px -14px rgba(0, 0, 0, 0.75);
+        overflow: hidden;
+        /* The whole shell is a drag handle except the interactive bits. */
+        -webkit-app-region: drag;
+      }
+      input,
+      button {
+        -webkit-app-region: no-drag;
+        font: inherit;
+      }
+      #bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+      }
+      #q {
+        flex: 1;
+        min-width: 0;
+        background: transparent;
+        border: 0;
+        outline: none;
+        color: var(--ink);
+        font-size: 14px;
+        padding: 9px 6px;
+      }
+      #q::placeholder {
+        color: var(--faint);
+      }
+      .btn {
+        border: 0;
+        border-radius: 10px;
+        background: var(--raised);
+        color: var(--ink);
+        font-size: 13px;
+        padding: 9px 13px;
+        cursor: pointer;
+        transition: background 140ms ease, opacity 140ms ease;
+      }
+      .btn:hover:not(:disabled) {
+        background: var(--line);
+      }
+      .btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .btn.primary {
+        background: var(--ember);
+        color: var(--void);
+        font-weight: 600;
+      }
+      #hint {
+        padding: 0 16px 10px;
+        font-size: 11px;
+        color: var(--faint);
+      }
+      kbd {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 4px;
+        font-family: inherit;
+        font-size: 10px;
+      }
+      #answer {
+        display: none;
+        border-top: 1px solid var(--line);
+        padding: 14px 16px 16px;
+      }
+      #meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+      #chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      #chip .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      #ms {
+        color: var(--faint);
+        font-family: "Cascadia Mono", Consolas, monospace;
+      }
+      #say {
+        display: flex;
+        gap: 11px;
+        font-size: 15.5px;
+        line-height: 1.6;
+      }
+      #num {
+        flex: 0 0 auto;
+        width: 23px;
+        height: 23px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--void);
+        margin-top: 2px;
+      }
+      #nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      #pips {
+        display: flex;
+        gap: 5px;
+        margin-right: auto;
+      }
+      .pip {
+        height: 5px;
+        width: 5px;
+        border-radius: 999px;
+        background: var(--line);
+        transition: all 200ms ease;
+      }
+      .pip.on {
+        width: 22px;
+      }
+      #err {
+        display: none;
+        padding: 11px 16px;
+        border-top: 1px solid var(--line);
+        color: var(--ember);
+        font-size: 13px;
+      }
+      .spin {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--ember);
+        animation: ping 1s ease-out infinite;
+      }
+      @keyframes ping {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(2.6); opacity: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="shell">
+      <div id="bar">
+        <input id="q" placeholder="Ask about what's on your screen…" autocomplete="off" />
+        <button id="ask" class="btn primary">Ask</button>
+      </div>
+      <div id="hint">
+        <kbd>Enter</kbd> to ask · <kbd>Esc</kbd> to dismiss · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> from anywhere
+      </div>
+
+      <div id="err"></div>
+
+      <div id="answer">
+        <div id="meta">
+          <span id="chip"><span class="dot"></span><span id="chipText"></span></span>
+          <span id="ms"></span>
+        </div>
+        <div id="say"><div id="num">1</div><div id="text"></div></div>
+        <div id="nav">
+          <div id="pips"></div>
+          <button id="back" class="btn">Back</button>
+          <button id="next" class="btn">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const q = $("q"), askBtn = $("ask"), hint = $("hint"), err = $("err");
+      const answer = $("answer"), chip = $("chip"), chipText = $("chipText");
+      const ms = $("ms"), num = $("num"), text = $("text");
+      const pips = $("pips"), back = $("back"), next = $("next");
+
+      let result = null;
+      let index = 0;
+      let busy = false;
+
+      /** Keeps the window exactly as tall as its contents. */
+      function fit() {
+        requestAnimationFrame(() =>
+          window.cairn.resizeHud(document.getElementById("shell").offsetHeight + 20),
+        );
+      }
+
+      function reset() {
+        answer.style.display = "none";
+        err.style.display = "none";
+        result = null;
+        index = 0;
+        window.cairn.clear();
+        fit();
+      }
+
+      function showError(message) {
+        err.textContent = message;
+        err.style.display = "block";
+        answer.style.display = "none";
+        fit();
+      }
+
+      /** Renders one step and asks the overlay to point at it. */
+      function render() {
+        if (!result) return;
+        const step = result.steps[index];
+        const memory = result.source === "trail";
+        const colour = memory ? "var(--moss)" : "var(--ember)";
+
+        chip.style.background = memory ? "rgba(53,214,160,0.14)" : "rgba(255,143,76,0.14)";
+        chip.style.color = colour;
+        chip.querySelector(".dot").style.background = colour;
+        chipText.textContent = memory
+          ? `From ${result.trail?.author?.name ?? "the team"}'s trail`
+          : "Read from your screen";
+        ms.textContent = `${result.elapsedMs}ms`;
+
+        num.style.background = colour;
+        num.textContent = String(index + 1);
+        text.textContent = step.say;
+
+        pips.innerHTML = "";
+        result.steps.forEach((_, i) => {
+          const p = document.createElement("div");
+          p.className = "pip" + (i === index ? " on" : "");
+          if (i === index) p.style.background = colour;
+          pips.appendChild(p);
+        });
+
+        back.disabled = index === 0;
+        next.disabled = index >= result.steps.length - 1;
+        answer.style.display = "block";
+        err.style.display = "none";
+        fit();
+
+        // Speak it. SpeechSynthesis needs no Google key, so unlike
+        // SpeechRecognition it works fine inside Electron.
+        try {
+          speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(step.say);
+          u.rate = 1.03;
+          speechSynthesis.speak(u);
+        } catch {}
+
+        window.cairn.draw({
+          target: step.target,
+          label: step.label,
+          tone: memory ? "moss" : "ember",
+          bounds: window.__lastBounds,
+        });
+      }
+
+      async function ask() {
+        const question = q.value.trim();
+        if (!question || busy) return;
+        busy = true;
+        askBtn.disabled = true;
+        askBtn.textContent = "…";
+        err.style.display = "none";
+        answer.style.display = "none";
+        window.cairn.clear();
+        fit();
+
+        // Capture before the network call so the frame matches the question's
+        // moment, not whatever is on screen when the answer lands.
+        const shot = await window.cairn.capture();
+        if (!shot.ok) {
+          showError(shot.error);
+          busy = false;
+          askBtn.disabled = false;
+          askBtn.textContent = "Ask";
+          return;
+        }
+        window.__lastBounds = shot.bounds;
+
+        const res = await window.cairn.ask(question, shot.base64);
+        busy = false;
+        askBtn.disabled = false;
+        askBtn.textContent = "Ask";
+
+        if (!res.ok) {
+          showError(res.error);
+          return;
+        }
+        result = res.result;
+        index = 0;
+        render();
+      }
+
+      askBtn.addEventListener("click", ask);
+      back.addEventListener("click", () => { if (index > 0) { index--; render(); } });
+      next.addEventListener("click", () => {
+        if (result && index < result.steps.length - 1) { index++; render(); }
+      });
+
+      q.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); ask(); }
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") window.cairn.dismiss();
+      });
+
+      window.cairn.onSummon(() => {
+        q.value = "";
+        q.focus();
+        reset();
+      });
+
+      fit();
+    </script>
+  </body>
+</html>

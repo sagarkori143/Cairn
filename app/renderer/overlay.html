@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Cairn overlay</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        /* The window is click-through at the OS level, but belt and braces:
+           nothing in here should ever be a pointer target. */
+        pointer-events: none;
+        user-select: none;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+      }
+      #ring {
+        position: absolute;
+        border-radius: 8px;
+        opacity: 0;
+        transition:
+          left 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          top 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          width 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          height 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 240ms ease;
+      }
+      #halo {
+        position: absolute;
+        inset: -6px;
+        border-radius: 12px;
+        animation: pulse 2.2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.45;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.06;
+          transform: scale(1.09);
+        }
+      }
+      #cursor {
+        position: absolute;
+        opacity: 0;
+        transition:
+          left 620ms cubic-bezier(0.22, 1, 0.36, 1),
+          top 620ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 240ms ease;
+        filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55));
+      }
+      #label {
+        position: absolute;
+        transform: translateX(-50%);
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        color: #08090d;
+        white-space: nowrap;
+        opacity: 0;
+        transition:
+          left 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          top 480ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 240ms ease;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Spotlight: one full-desktop dim with a hole cut where the target is.
+         An SVG mask gives a genuinely rounded cut-out and animates as one
+         element when the target moves between steps. -->
+    <svg id="dim" width="100%" height="100%" style="position: absolute; inset: 0; opacity: 0; transition: opacity 260ms ease">
+      <defs>
+        <mask id="hole">
+          <rect id="maskAll" width="100%" height="100%" fill="white" />
+          <rect id="maskHole" x="0" y="0" width="0" height="0" rx="8" fill="black" />
+        </mask>
+      </defs>
+      <rect width="100%" height="100%" fill="rgba(6,7,11,0.55)" mask="url(#hole)" />
+    </svg>
+
+    <div id="ring"><div id="halo"></div></div>
+    <div id="label"></div>
+    <svg id="cursor" width="30" height="30" viewBox="0 0 24 24" fill="none">
+      <path
+        id="cursorPath"
+        d="M5 3l14 8.2-6.1 1.6-2.6 6.1L5 3z"
+        stroke="#08090d"
+        stroke-width="1.4"
+        stroke-linejoin="round"
+      />
+    </svg>
+
+    <script>
+      const dim = document.getElementById("dim");
+      const maskHole = document.getElementById("maskHole");
+      const ring = document.getElementById("ring");
+      const halo = document.getElementById("halo");
+      const label = document.getElementById("label");
+      const cursor = document.getElementById("cursor");
+      const cursorPath = document.getElementById("cursorPath");
+
+      function clear() {
+        for (const el of [dim, ring, label, cursor]) el.style.opacity = "0";
+      }
+
+      window.cairn.onClear(clear);
+
+      window.cairn.onDraw(({ target, label: text, tone, bounds, virtual }) => {
+        if (!target) {
+          clear();
+          return;
+        }
+
+        const colour = tone === "moss" ? "#35d6a0" : "#ff8f4c";
+
+        /*
+         * Coordinate mapping, and the one place this can go subtly wrong.
+         *
+         * The model returns coordinates normalised 0..1 against the screenshot
+         * of a single display. This window spans the *virtual* desktop — every
+         * monitor unioned — whose origin can be negative when a second screen
+         * sits to the left of the primary. So: normalise into that display's
+         * absolute desktop position, then subtract the virtual origin to get a
+         * CSS offset inside this window.
+         */
+        const absX = bounds.x + target.x * bounds.width;
+        const absY = bounds.y + target.y * bounds.height;
+        const w = target.w * bounds.width;
+        const h = target.h * bounds.height;
+        const x = absX - virtual.x;
+        const y = absY - virtual.y;
+
+        maskHole.setAttribute("x", x);
+        maskHole.setAttribute("y", y);
+        maskHole.setAttribute("width", Math.max(w, 4));
+        maskHole.setAttribute("height", Math.max(h, 4));
+        dim.style.opacity = "1";
+
+        Object.assign(ring.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+          border: `2px solid ${colour}`,
+          boxShadow: `0 0 0 1px rgba(0,0,0,0.45), 0 0 26px ${colour}66`,
+          opacity: "1",
+        });
+        halo.style.border = `1.5px solid ${colour}`;
+
+        cursorPath.setAttribute("fill", colour);
+        Object.assign(cursor.style, {
+          left: `${x + w / 2 - 4}px`,
+          top: `${y + h / 2 - 2}px`,
+          opacity: "1",
+        });
+
+        if (text) {
+          label.textContent = text;
+          label.style.background = colour;
+          // Flip below the target when it sits near the top of the desktop,
+          // so the chip never runs off-screen.
+          const above = y > 46;
+          Object.assign(label.style, {
+            left: `${x + w / 2}px`,
+            top: above ? `${y - 34}px` : `${y + h + 12}px`,
+            opacity: "1",
+          });
+        } else {
+          label.style.opacity = "0";
+        }
+      });
+    </script>
+  </body>
+</html>

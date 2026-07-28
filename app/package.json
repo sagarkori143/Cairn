@@ -1,0 +1,34 @@
+{
+  "name": "cairn-desktop",
+  "version": "0.1.0",
+  "description": "Screen-aware help that your team keeps — Windows client",
+  "author": "sagarkori143",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --dir",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "dev.cairn.desktop",
+    "productName": "Cairn",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "artifactName": "Cairn-${version}-portable.exe"
+    },
+    "portable": {
+      "artifactName": "Cairn-${version}-portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  }
+}
