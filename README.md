@@ -11,6 +11,10 @@ app/      Windows desktop client (Electron)
 server/   API (Go) — vision, transcription, recall, trails
 ```
 
+**[Download Cairn-portable.exe](https://github.com/sagarkori143/Cairn/releases/latest)** — no installer, double-click to run, delete the file to remove it. Windows will warn that it can't verify the publisher, because the binary is unsigned; choose **More info → Run anyway**.
+
+The API runs at `https://cairn-si3g.vercel.app`, so there is nothing to configure and no keys to supply. Every push touching `app/` rebuilds the binary on a Windows runner and replaces it on the latest release.
+
 ## 概要
 
 Windows 用のデスクトップアプリと、その API サーバーです。
@@ -120,11 +124,23 @@ It started as local Whisper, which was appealing — audio never leaving the mac
 
 For the same reason, the transcription now lands in the input box and waits rather than asking immediately. One keystroke to confirm is cheap next to a wrong answer you also paid for.
 
+## The trail library is read-only, and that was measured
+
+The hosted deployment can't hold state, so saving is disabled rather than left to fail quietly.
+
+I checked rather than assumed. Every recall hit increments a trail's `reuseCount`, which makes instance identity observable from outside: three consecutive requests took it 7 → 8 → 9, so one instance was serving them. After five minutes idle it was back to 7, and after seven minutes still 7 — the instance had been recycled and its memory discarded.
+
+That means a save would show someone "Saved for the team" for something that disappears within minutes. A read-only library is an honest limitation; the other is a visible lie. Setting the two Upstash variables switches the store to shared persistence and saving becomes safe to re-enable — `store.go` already has that adapter.
+
+What still demonstrates the idea: ask a question someone already answered and it returns in about a millisecond, from a teammate's trail, with no model call at all.
+
 ## Status
 
-Working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, voice input, spoken answers, step navigation, tray, self-exclusion from capture, recall, trails, rate limiting.
+Working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, voice input, spoken answers, step navigation, tray, self-exclusion from capture, recall, rate limiting.
 
-Not built: a trails browser inside the HUD — the tray menu opens the library instead. True hold-to-talk is also absent, because Electron's `globalShortcut` only fires on key-down; press-to-start with silence detection replaces it, and real push-to-talk would need a native input hook.
+Measured on the live deployment: recall 0ms, a cold vision call 7.9s end to end, and the returned pointer landing on the correct control.
+
+Not built: saving trails on the hosted deployment (above), a trails browser inside the HUD — the tray menu opens the library instead — and true hold-to-talk, because Electron's `globalShortcut` only fires on key-down. Press-to-start with silence detection replaces it; real push-to-talk would need a native input hook.
 
 ## Licence and third-party
 
