@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("cairn", {
 
   serverUrl: () => ipcRenderer.invoke("cairn:server-url"),
 
+  /** The chord that actually registered — null if none could be taken. */
+  hotkey: () => ipcRenderer.invoke("cairn:hotkey"),
+
   /**
    * Transcribe recorded audio. Takes the raw bytes in whatever container the
    * recorder produced — the server identifies the format, so nothing needs

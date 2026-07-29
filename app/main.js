@@ -40,13 +40,33 @@ const path = require("node:path");
 const SERVER = process.env.CAIRN_SERVER || "https://cairn-si3g.vercel.app";
 
 /**
- * Press this anywhere to summon Cairn.
+ * Press one of these anywhere to summon Cairn — the first that registers wins.
  *
- * Worth knowing: on Windows, Ctrl+Space is also the IME toggle for Chinese,
- * Japanese and Korean input. Registration simply fails if something already
- * owns the chord, which is logged at startup rather than failing silently.
+ * Ctrl+Space is the best chord and the least dependable one: on Windows it is
+ * also the IME toggle for Japanese, Chinese and Korean input, so on exactly the
+ * machines this is most likely to be demonstrated on, it may already be taken.
+ * Registering it and logging a failure was no use — the log goes nowhere in a
+ * packaged app, so the key simply did nothing and the app looked broken.
+ *
+ * So it falls down the list instead, and whichever one took is shown in the
+ * tray and in the panel rather than assumed.
  */
-const HOTKEY = "Control+Space";
+const HOTKEY_CHOICES = [
+  "Control+Space",
+  "Control+Shift+Space",
+  "Alt+Space",
+  "Control+Alt+C",
+];
+
+let activeHotkey = null;
+
+/** Reads back the way a keyboard is labelled, not the way Electron spells it. */
+function prettyHotkey(accelerator) {
+  return (accelerator ?? "")
+    .replace("Control", "Ctrl")
+    .split("+")
+    .join(" + ");
+}
 
 let hud = null;
 let overlay = null;
@@ -573,6 +593,9 @@ ipcMain.on("cairn:resize-hud", (_e, { height }) => {
 
 ipcMain.handle("cairn:server-url", () => SERVER);
 
+/** Whichever chord actually registered, or null if every one was taken. */
+ipcMain.handle("cairn:hotkey", () => (activeHotkey ? prettyHotkey(activeHotkey) : null));
+
 /* ------------------------------------------------------------------ tray */
 
 function createTray() {
@@ -589,10 +612,50 @@ function createTray() {
       ).toString("base64"),
   );
   tray = new Tray(icon);
-  tray.setToolTip(`Cairn — press ${HOTKEY}`);
+  tray.on("click", showHud);
+  refreshTray();
+}
+
+/**
+ * Starting with Windows.
+ *
+ * Only offered from a packaged build: in development the executable is
+ * Electron itself, and registering that would launch a bare Electron at every
+ * login long after this checkout is gone. It records the exe's current path,
+ * so moving a portable Cairn after enabling this leaves a dead entry — which
+ * is why it is a choice in the tray and not something switched on by default.
+ */
+function autoStartEnabled() {
+  return app.isPackaged && app.getLoginItemSettings().openAtLogin;
+}
+
+function setAutoStart(on) {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [] });
+  refreshTray();
+}
+
+/** Rebuilt rather than mutated, because the labels carry live state. */
+function refreshTray() {
+  if (!tray) return;
+
+  const key = activeHotkey ? prettyHotkey(activeHotkey) : null;
+  tray.setToolTip(key ? `Cairn — press ${key}` : "Cairn — click to ask");
+
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: `Ask Cairn  (${HOTKEY})`, click: showHud },
+      { label: key ? `Ask Cairn  (${key})` : "Ask Cairn", click: showHud },
+      ...(activeHotkey
+        ? []
+        : [{ label: "No hotkey available — every choice was taken", enabled: false }]),
+      { type: "separator" },
+      {
+        label: "Start with Windows",
+        type: "checkbox",
+        checked: autoStartEnabled(),
+        enabled: app.isPackaged,
+        click: (item) => setAutoStart(item.checked),
+      },
       { type: "separator" },
       { label: "Open trails in browser", click: () => shell.openExternal(SERVER) },
       { label: `Server: ${SERVER}`, enabled: false },
@@ -600,7 +663,6 @@ function createTray() {
       { label: "Quit", click: () => app.quit() },
     ]),
   );
-  tray.on("click", showHud);
 }
 
 /* ------------------------------------------------------------------- app */
@@ -629,9 +691,17 @@ if (!app.requestSingleInstanceLock()) {
     createHud();
     createTray();
 
-    if (!globalShortcut.register(HOTKEY, showHud)) {
-      console.error(`[cairn] could not register ${HOTKEY} — another app may hold it`);
+    for (const choice of HOTKEY_CHOICES) {
+      if (globalShortcut.register(choice, showHud)) {
+        activeHotkey = choice;
+        break;
+      }
+      console.warn(`[cairn] ${choice} is taken, trying the next one`);
     }
+    if (!activeHotkey) {
+      console.error("[cairn] no hotkey available — the tray icon still opens Cairn");
+    }
+    refreshTray();
 
     // Keep the overlay covering the desktop when monitors are added, removed,
     // or rearranged mid-session.

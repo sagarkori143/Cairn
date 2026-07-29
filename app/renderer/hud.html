@@ -211,7 +211,7 @@
       </div>
 
       <div id="hint">
-        <kbd>Enter</kbd> ask · <kbd>Esc</kbd> close · <kbd>Ctrl</kbd><kbd>Space</kbd> from anywhere
+        <kbd>Enter</kbd> ask · <kbd>Esc</kbd> close · <span id="hotkeyHint"></span>
       </div>
       <div id="level"><div id="levelFill"></div></div>
 
@@ -967,6 +967,25 @@
         // Reset done. Tell main the panel is the size it will actually be, so
         // it can be put on screen already settled rather than resizing in view.
         fit({ announce: true });
+      });
+
+      /*
+       * Name the key that actually works.
+       *
+       * The hint used to be written into the markup as Ctrl+Space, which is
+       * only true when that chord was free — on a machine where a Japanese or
+       * Chinese IME already owns it, Cairn falls to another and the panel would
+       * otherwise still be advertising the one that does nothing.
+       */
+      window.cairn.hotkey().then((key) => {
+        const slot = $("hotkeyHint");
+        if (!key) {
+          slot.textContent = "tray icon to open";
+          return;
+        }
+        slot.innerHTML =
+          key.split(" + ").map((k) => `<kbd>${k}</kbd>`).join("") + " from anywhere";
+        fit();
       });
 
       fit();

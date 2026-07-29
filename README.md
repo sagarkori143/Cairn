@@ -1,6 +1,6 @@
 # Cairn
 
-Press `Ctrl+Alt+C` anywhere in Windows. Ask about whatever is on your screen. Cairn draws the answer **on your actual desktop** — dimming everything else, ringing the control you need, and talking you through it.
+Press `Ctrl+Space` anywhere in Windows. Ask about whatever is on your screen. Cairn draws the answer **on your actual desktop** — dimming everything else, ringing the control you need, and talking you through it.
 
 Then it keeps the answer, so the next person on your team who hits that wall gets it instantly instead of asking again.
 
@@ -13,13 +13,17 @@ server/   API (Go) — vision, transcription, recall, trails
 
 **[Download Cairn-portable.exe](https://github.com/sagarkori143/Cairn/releases/latest)** — no installer, double-click to run, delete the file to remove it. Windows will warn that it can't verify the publisher, because the binary is unsigned; choose **More info → Run anyway**.
 
+It then sits in the system tray and stays there, so the hotkey works until you quit it. It does not start with Windows unless you ask it to — **tray icon → Start with Windows** — because a portable file that quietly adds itself to startup is not behaving like a portable file.
+
+`Ctrl+Space` is also the IME toggle for Japanese, Chinese and Korean input. If something already owns it, Cairn takes `Ctrl+Shift+Space`, then `Alt+Space`, then `Ctrl+Alt+C`, and tells you which one it got in the tray tooltip and in the panel itself. If every one is taken, clicking the tray icon still opens it.
+
 The API runs at `https://cairn-si3g.vercel.app`, so there is nothing to configure and no keys to supply. Every push touching `app/` rebuilds the binary on a Windows runner and replaces it on the latest release.
 
 ## 概要
 
 Windows 用のデスクトップアプリと、その API サーバーです。
 
-`Ctrl+Alt+C` を押すと、どのアプリを使っている最中でも呼び出せます。画面を読み取り、**実際のデスクトップ上に**対象のボタンを囲んで指し示し、音声で手順を案内します。
+`Ctrl+Space` を押すと、どのアプリを使っている最中でも呼び出せます。画面を読み取り、**実際のデスクトップ上に**対象のボタンを囲んで指し示し、音声で手順を案内します。日本語 IME が `Ctrl+Space` を使用している場合は、`Ctrl+Shift+Space` など空いているキーに自動で切り替わり、実際に割り当てられたキーをトレイとパネルに表示します。
 
 解決した手順は「トレイル」として保存され、次に同じ場所で詰まった人は、モデルを待たずに同じ手順を受け取れます。チームで使うほど速くなり、コストも下がる構造です。
 
@@ -39,7 +43,7 @@ A browser can only see a screen you explicitly share with it, and its hotkey onl
 ## How it works
 
 ```
-Ctrl+Alt+C  →  HUD appears on whichever screen your mouse is on
+Ctrl+Space  →  HUD appears on whichever screen your mouse is on
             →  captures that display (Cairn excludes itself from the shot)
             →  POST /api/ask
                   1. recall — has the team already solved this?   ~0ms, free
@@ -102,7 +106,7 @@ npm install
 CAIRN_SERVER=http://localhost:8080 npm start
 ```
 
-Cairn lives in the system tray — no window until you summon it. `Ctrl+Alt+C` from anywhere, `Esc` to dismiss.
+Cairn lives in the system tray — no window until you summon it. `Ctrl+Space` from anywhere, `Esc` to dismiss.
 
 Build a portable `.exe`:
 
