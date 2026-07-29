@@ -54,21 +54,33 @@ app/
 
 ## Running it
 
-Needs Node 20+ and the [server](https://github.com/Torutesu/hacklikey) running.
+Needs Node 20+. It talks to the deployed backend by default, so there's nothing else to stand up.
 
 ```bash
 cd app
 npm install
-CAIRN_SERVER=http://localhost:3000 npm start
+npm start
 ```
 
 Cairn lives in the system tray — no window until you summon it. `Ctrl+Alt+C` from anywhere, `Esc` to dismiss.
+
+Point it at a local backend instead with `CAIRN_SERVER=http://localhost:3000 npm start`.
 
 To build a portable `.exe`:
 
 ```bash
 npm run dist        # → app/dist/Cairn-0.1.0-portable.exe
 ```
+
+## Voice runs on your machine
+
+Electron ships without Google's API keys, so the browser `SpeechRecognition` API — what the web version uses — doesn't work here. Rather than route audio through a paid transcription service, this runs **Whisper locally**.
+
+That turned out to be the better answer rather than a workaround. Cairn already watches your screen; asking you to also stream your voice to a third party is a lot. Recorded audio never leaves the machine — only the resulting text, and only alongside a screenshot you chose to send.
+
+`whisper-tiny.en` is the deliberate pick: ~40MB, about a second for a short question, downloaded once on first use and cached. Larger models handle accents and noise better, but questions to a screen assistant are short and context-obvious, and doubling the wait to better resolve a word the vision model can infer anyway is a poor trade.
+
+Press **Speak**, ask, and stop talking — it detects the silence and sends.
 
 ## Two details worth knowing
 
@@ -78,9 +90,13 @@ npm run dist        # → app/dist/Cairn-0.1.0-portable.exe
 
 ## Status
 
-Built and working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, spoken steps, step navigation, tray, self-exclusion from capture.
+Working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, on-device voice input, spoken answers, step navigation, tray, and self-exclusion from capture.
 
-Not yet: voice input (local Whisper, in progress), a trails browser inside the HUD — the tray menu opens the library in a browser for now.
+Not built: a trails browser inside the HUD — the tray menu opens the library in a browser for now. True hold-to-talk is also absent, because Electron's `globalShortcut` only fires on key-down; press-to-start with silence detection replaces it, and real push-to-talk would need a native input hook.
+
+## Why there's no `server/` here
+
+The backend lives once, in [Torutesu/hacklikey](https://github.com/Torutesu/hacklikey), and both clients talk to it — the web UI and this desktop app. Keeping a second copy alongside this client would guarantee the two drift apart, and there is nothing about the desktop experience that needs its own server.
 
 ## Licence and third-party
 

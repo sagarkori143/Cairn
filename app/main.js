@@ -25,11 +25,19 @@ const {
   Menu,
   nativeImage,
   shell,
+  session,
 } = require("electron");
 const path = require("node:path");
 
-/** Where the brain lives. Overridable so a dev build can point at localhost. */
-const SERVER = process.env.CAIRN_SERVER || "http://localhost:3000";
+/**
+ * Where the brain lives.
+ *
+ * Defaults to the deployed instance so a packaged build works on a machine
+ * that has never run this repo — the binary has to be useful to someone who
+ * only downloaded an .exe. Override with CAIRN_SERVER to develop against a
+ * local server.
+ */
+const SERVER = process.env.CAIRN_SERVER || "https://cairn-mu-amber.vercel.app";
 
 /** Press this anywhere to summon Cairn. */
 const HOTKEY = "Control+Alt+C";
@@ -207,6 +215,85 @@ async function captureActiveScreen() {
   }
 }
 
+/* ------------------------------------------------------------ transcribe */
+
+/**
+ * Speech-to-text, entirely on this machine.
+ *
+ * Electron ships without Google's API keys, so the browser SpeechRecognition
+ * API — which is what the web version uses — fails here. Rather than send audio
+ * to a paid service, Cairn runs Whisper locally.
+ *
+ * That turns a limitation into the better answer for a tool like this. Cairn
+ * already watches your screen; asking users to also stream their voice to a
+ * third party is a lot to ask. Nothing recorded here ever leaves the machine —
+ * only the resulting text, and only then alongside a screenshot they chose to
+ * send.
+ *
+ * `whisper-tiny.en` is the deliberate pick: ~40MB and roughly a second for a
+ * short question. Larger models are more accurate on accents and noise, but the
+ * questions people ask a screen assistant are short and domain-obvious, and
+ * doubling the wait to better resolve a word the vision model can infer from
+ * context anyway is a bad trade.
+ */
+let whisper = null;
+let whisperLoading = null;
+
+async function getWhisper(onProgress) {
+  if (whisper) return whisper;
+  if (whisperLoading) return whisperLoading;
+
+  whisperLoading = (async () => {
+    // @huggingface/transformers is ESM-only; this file is CommonJS, so it has
+    // to come in through a dynamic import.
+    const { pipeline, env } = await import("@huggingface/transformers");
+
+    // Keep weights beside the app's own data so they survive restarts and are
+    // removed with the app, rather than landing in a global npm cache.
+    env.cacheDir = path.join(app.getPath("userData"), "models");
+    env.allowRemoteModels = true;
+
+    whisper = await pipeline("automatic-speech-recognition", "Xenova/whisper-tiny.en", {
+      dtype: "q8", // quantised: about a quarter the size, no meaningful accuracy loss here
+      progress_callback: (p) => {
+        if (p.status === "progress" && onProgress) {
+          onProgress({ file: p.file, percent: Math.round(p.progress ?? 0) });
+        }
+      },
+    });
+    return whisper;
+  })();
+
+  try {
+    return await whisperLoading;
+  } finally {
+    whisperLoading = null;
+  }
+}
+
+ipcMain.handle("cairn:transcribe", async (event, { samples }) => {
+  try {
+    const model = await getWhisper((p) => event.sender.send("cairn:model-progress", p));
+    // The renderer already resampled to 16kHz mono, which is what Whisper wants.
+    const out = await model(new Float32Array(samples));
+    const text = (out?.text ?? "").trim();
+    return { ok: true, text };
+  } catch (err) {
+    console.error("[cairn] transcription failed:", err);
+    return { ok: false, error: "Couldn't make out that audio. Try typing instead." };
+  }
+});
+
+/** Lets the HUD warm the model up before the first question rather than during it. */
+ipcMain.handle("cairn:warm-whisper", async (event) => {
+  try {
+    await getWhisper((p) => event.sender.send("cairn:model-progress", p));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
 /* ------------------------------------------------------------------- ipc */
 
 ipcMain.handle("cairn:capture", async () => {
@@ -306,6 +393,18 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", showHud);
 
   app.whenReady().then(() => {
+    /*
+     * Grant the microphone, and nothing else.
+     *
+     * Electron denies media by default. Rather than allow everything, this
+     * approves only what Cairn needs and refuses the rest — the HUD renders
+     * text produced from whatever happened to be on the user's screen, so it
+     * should hold the narrowest set of capabilities that still works.
+     */
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+      callback(permission === "media" || permission === "audioCapture");
+    });
+
     createOverlay();
     createHud();
     createTray();

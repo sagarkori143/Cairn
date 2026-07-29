@@ -176,6 +176,27 @@
         background: var(--ember);
         animation: ping 1s ease-out infinite;
       }
+      #mic.recording {
+        background: var(--ember);
+        color: var(--void);
+        font-weight: 600;
+      }
+      #level {
+        height: 0;
+        overflow: hidden;
+        transition: height 200ms ease;
+        padding: 0 16px;
+      }
+      #level.on {
+        height: 14px;
+      }
+      #levelFill {
+        height: 3px;
+        width: 0%;
+        background: var(--ember);
+        border-radius: 999px;
+        transition: width 90ms linear;
+      }
       @keyframes ping {
         0% { transform: scale(1); opacity: 1; }
         100% { transform: scale(2.6); opacity: 0; }
@@ -185,12 +206,21 @@
   <body>
     <div id="shell">
       <div id="bar">
+        <button id="mic" class="btn" title="Speak your question">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align: -2px">
+            <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <span id="micLabel">Speak</span>
+        </button>
         <input id="q" placeholder="Ask about what's on your screen…" autocomplete="off" />
         <button id="ask" class="btn primary">Ask</button>
       </div>
       <div id="hint">
         <kbd>Enter</kbd> to ask · <kbd>Esc</kbd> to dismiss · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> from anywhere
       </div>
+      <!-- Level meter, visible only while recording, so you can see it's hearing you. -->
+      <div id="level"><div id="levelFill"></div></div>
 
       <div id="err"></div>
 
@@ -328,6 +358,148 @@
         index = 0;
         render();
       }
+
+      /* ------------------------------------------------------------ voice */
+
+      /**
+       * Records, then transcribes locally.
+       *
+       * Press to start rather than hold: Electron's global hotkey only fires on
+       * key-down — there is no key-up — so true push-to-talk would need a
+       * native input hook. Auto-stopping on silence turns that constraint into
+       * something arguably nicer, since you don't have to keep a chord held
+       * while you think of the words.
+       */
+      const mic = $("mic"), micLabel = $("micLabel");
+      const level = $("level"), levelFill = $("levelFill");
+
+      let recorder = null;
+      let stream = null;
+      let recording = false;
+
+      /** Whisper wants 16kHz mono; whatever the mic gave us gets resampled. */
+      async function toWhisperSamples(blob) {
+        const ctx = new AudioContext();
+        const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+        await ctx.close();
+
+        const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+        const src = offline.createBufferSource();
+        src.buffer = decoded;
+        src.connect(offline.destination);
+        src.start();
+        const out = await offline.startRendering();
+        return Array.from(out.getChannelData(0));
+      }
+
+      async function startRecording() {
+        if (recording) return stopRecording();
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          showError("No microphone available. Type your question instead.");
+          return;
+        }
+
+        recording = true;
+        mic.classList.add("recording");
+        micLabel.textContent = "Listening…";
+        level.classList.add("on");
+        err.style.display = "none";
+        fit();
+
+        const chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          mic.classList.remove("recording");
+          level.classList.remove("on");
+          levelFill.style.width = "0%";
+          micLabel.textContent = "Transcribing…";
+          fit();
+
+          try {
+            const samples = await toWhisperSamples(new Blob(chunks, { type: "audio/webm" }));
+            // Under ~0.4s is almost always a misfire — a stray click, not a question.
+            if (samples.length < 6400) {
+              micLabel.textContent = "Speak";
+              recording = false;
+              return;
+            }
+            const res = await window.cairn.transcribe(samples);
+            micLabel.textContent = "Speak";
+            recording = false;
+            if (!res.ok) return showError(res.error);
+            if (!res.text) return showError("Didn't catch that — try again, or type it.");
+            q.value = res.text;
+            ask(); // heard you; go straight to answering
+          } catch {
+            micLabel.textContent = "Speak";
+            recording = false;
+            showError("Couldn't process that audio. Type your question instead.");
+          }
+        };
+
+        recorder.start();
+
+        /*
+         * Silence detection. Waits for speech to actually begin before arming,
+         * so a slow start doesn't cut you off before you've said anything.
+         */
+        const ctx = new AudioContext();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const buf = new Float32Array(analyser.fftSize);
+
+        let spoke = false;
+        let quietSince = null;
+        const started = Date.now();
+
+        const tick = setInterval(() => {
+          if (!recording) return clearInterval(tick);
+
+          analyser.getFloatTimeDomainData(buf);
+          let sum = 0;
+          for (const v of buf) sum += v * v;
+          const rms = Math.sqrt(sum / buf.length);
+
+          levelFill.style.width = `${Math.min(100, Math.round(rms * 900))}%`;
+
+          if (rms > 0.015) {
+            spoke = true;
+            quietSince = null;
+          } else if (spoke) {
+            quietSince ??= Date.now();
+            if (Date.now() - quietSince > 1200) {
+              clearInterval(tick);
+              ctx.close();
+              if (recorder?.state === "recording") recorder.stop();
+            }
+          }
+
+          // Hard stop, so a noisy room can't record forever.
+          if (Date.now() - started > 15000) {
+            clearInterval(tick);
+            ctx.close();
+            if (recorder?.state === "recording") recorder.stop();
+          }
+        }, 100);
+      }
+
+      function stopRecording() {
+        if (recorder?.state === "recording") recorder.stop();
+      }
+
+      mic.addEventListener("click", startRecording);
+
+      // Model download progress — the first run fetches ~40MB of weights, and
+      // silence during that reads as the app being broken.
+      window.cairn.onModelProgress((p) => {
+        if (p.percent < 100) micLabel.textContent = `Loading voice ${p.percent}%`;
+      });
 
       askBtn.addEventListener("click", ask);
       back.addEventListener("click", () => { if (index > 0) { index--; render(); } });
