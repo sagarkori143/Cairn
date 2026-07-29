@@ -631,7 +631,8 @@ function autoStartEnabled() {
 
 function setAutoStart(on) {
   if (!app.isPackaged) return;
-  app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [] });
+  // The flag is what tells a login-time start not to put the panel on screen.
+  app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: ["--autostart"] });
   refreshTray();
 }
 
@@ -702,6 +703,21 @@ if (!app.requestSingleInstanceLock()) {
       console.error("[cairn] no hotkey available — the tray icon still opens Cairn");
     }
     refreshTray();
+
+    /*
+     * Say something on launch, unless Windows started it.
+     *
+     * Double-clicking used to do nothing visible at all: the panel waits for a
+     * hotkey and the only other sign of life is a tray icon, which Windows 11
+     * files away in the overflow arrow by default. So the app was running,
+     * correctly, and looked like it had failed to open — and if Ctrl+Space had
+     * been taken by an IME, the one thing that would have explained it was the
+     * hint inside the panel nobody had seen.
+     *
+     * Starting with Windows is the exception: something appearing over your
+     * work every time you log in is not a greeting, it is an interruption.
+     */
+    if (!process.argv.includes("--autostart")) showHud();
 
     // Keep the overlay covering the desktop when monitors are added, removed,
     // or rearranged mid-session.

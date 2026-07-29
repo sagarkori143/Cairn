@@ -13,7 +13,7 @@ server/   API (Go) — vision, transcription, recall, trails
 
 **[Download Cairn-portable.exe](https://github.com/sagarkori143/Cairn/releases/latest)** — no installer, double-click to run, delete the file to remove it. Windows will warn that it can't verify the publisher, because the binary is unsigned; choose **More info → Run anyway**.
 
-It then sits in the system tray and stays there, so the hotkey works until you quit it. It does not start with Windows unless you ask it to — **tray icon → Start with Windows** — because a portable file that quietly adds itself to startup is not behaving like a portable file.
+It opens the ask panel once so you can see it started, then sits in the system tray and stays there, so the hotkey works until you quit it. It does not start with Windows unless you ask it to — **tray icon → Start with Windows** — because a portable file that quietly adds itself to startup is not behaving like a portable file. Started that way it stays quiet, since something appearing over your work at every login is an interruption rather than a greeting.
 
 `Ctrl+Space` is also the IME toggle for Japanese, Chinese and Korean input. If something already owns it, Cairn takes `Ctrl+Shift+Space`, then `Alt+Space`, then `Ctrl+Alt+C`, and tells you which one it got in the tray tooltip and in the panel itself. If every one is taken, clicking the tray icon still opens it.
 
