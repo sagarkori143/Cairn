@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"sort"
@@ -149,21 +150,26 @@ func (u *upstashStore) cmd(args ...string) (json.RawMessage, error) {
 	return wrapper.Result, nil
 }
 
-// ensureSeeded populates a fresh database once, so a new deployment still
-// demonstrates the team-memory idea rather than showing an empty library.
+// ensureSeeded makes sure the demo trails exist, so a new deployment shows the
+// team-memory idea rather than an empty library.
+//
+// Uses HSETNX per trail rather than "seed only if the store is empty". The
+// emptiness check had an ordering bug: a save arriving before the first read
+// left the store non-empty, so seeding was skipped — permanently, since the
+// condition never became true again. HSETNX has no such ordering: each seed is
+// written only if its own key is absent, so it is idempotent, restores a
+// deleted seed, and never overwrites a real trail.
 func (u *upstashStore) ensureSeeded() {
 	u.seedOnce.Do(func() {
-		raw, err := u.cmd("HLEN", upstashKey)
-		if err != nil {
-			return
-		}
-		var n int
-		if json.Unmarshal(raw, &n) == nil && n > 0 {
-			return
-		}
 		for _, t := range seedTrails() {
-			if encoded, err := json.Marshal(t); err == nil {
-				_, _ = u.cmd("HSET", upstashKey, t.ID, string(encoded))
+			encoded, err := json.Marshal(t)
+			if err != nil {
+				continue
+			}
+			if _, err := u.cmd("HSETNX", upstashKey, t.ID, string(encoded)); err != nil {
+				// A failure here means an empty-looking library, not a broken
+				// one — worth a log, not worth failing the request.
+				log.Printf("[cairn] seeding %s failed: %v", t.ID, err)
 			}
 		}
 	})
