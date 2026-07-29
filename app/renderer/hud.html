@@ -429,7 +429,7 @@
         });
       }
 
-      async function ask({ fromVoice = false } = {}) {
+      async function ask({ fromVoice = false, frame = null } = {}) {
         const question = q.value.trim();
         if (!question || busy) { if (fromVoice) stopVoiceFlow(); return; }
         const myFlow = flowId;
@@ -447,7 +447,13 @@
 
         // Capture before the network call so the frame matches the question's
         // moment, not whatever is on screen when the answer lands.
-        const shot = await window.cairn.capture();
+        // A frame taken when Speak was pressed, if there is one. Falling back
+        // to a fresh capture matters: the early one is taken before the
+        // microphone is even granted, so a refusal there must not also cost
+        // the screenshot.
+        let shot = frame ? await frame : null;
+        if (!shot?.ok) shot = await window.cairn.capture();
+
         if (myFlow !== flowId) { busy = false; askBtn.disabled = false; askBtn.textContent = "Ask"; return; }
         if (!shot.ok) {
           busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
@@ -542,6 +548,46 @@
       let socket = null;
 
       /*
+       * A transcription token, fetched before it is needed.
+       *
+       * Asking for one at the moment Speak is clicked put a round trip to the
+       * server between the click and the point where anything you said was
+       * being listened to — about two seconds, all of it after you had already
+       * decided to talk. Summoning the panel is far enough ahead to have one
+       * waiting.
+       *
+       * They last a minute, and a lease is refused well before that so a
+       * socket can't open onto a credential that dies mid-sentence. Held to
+       * one request per half minute: a token costs the same rate budget as a
+       * transcription, and Ctrl+Space is cheap to press.
+       */
+      let tokenLease = null;
+
+      function prefetchListenToken() {
+        if (tokenLease && Date.now() - tokenLease.at < 30000) return;
+        tokenLease = { at: Date.now(), promise: window.cairn.listenToken() };
+      }
+
+      function leaseListenToken() {
+        const fresh = tokenLease && Date.now() - tokenLease.at < 30000;
+        const promise = fresh ? tokenLease.promise : window.cairn.listenToken();
+        tokenLease = null; // one token, one session
+        return promise;
+      }
+
+      /*
+       * The screen as it was when you pressed Speak.
+       *
+       * The shot used to be taken after your last word, so its cost landed
+       * squarely in the wait you notice. Taken at the click instead, it
+       * overlaps with the whole time you spend talking and is already in hand
+       * when you stop. It is also the more honest moment: what you were
+       * looking at when you decided to ask, rather than whatever the screen
+       * drifted to while you finished the sentence.
+       */
+      let framePromise = null;
+
+      /*
        * Identifies the current run so an abandoned one can't finish.
        *
        * Escape stops what is on screen, but a question already with the model
@@ -589,9 +635,13 @@
         voiceScreen = await window.cairn.activeScreen();
         window.cairn.stage({ kind: "listening", level: 0, hint: "Getting ready", ...voiceScreen });
 
+        // Grab the screen now, while there is a sentence about to be spoken
+        // over it. Nothing waits on this — it is collected when you stop.
+        framePromise = window.cairn.capture();
+
         // Neither of these needs the other, so they overlap instead of queueing.
         const [tokenResult, micResult] = await Promise.allSettled([
-          window.cairn.listenToken(),
+          leaseListenToken(),
           navigator.mediaDevices.getUserMedia({ audio: true }),
         ]);
 
@@ -690,7 +740,8 @@
           if (!heard) return failVoice("Didn't catch that — try again, or type it.");
           q.value = heard;
           startThinkingWords();
-          ask({ fromVoice: true });
+          ask({ fromVoice: true, frame: framePromise });
+          framePromise = null;
         };
 
         /*
@@ -849,6 +900,9 @@
         q.value = "";
         clearAnswer();
         q.focus();
+        // Speak is one click away from here — have the credential ready before
+        // it is asked for.
+        prefetchListenToken();
       });
 
       fit();

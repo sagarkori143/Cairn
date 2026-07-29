@@ -214,11 +214,18 @@ async function captureActiveScreen() {
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
 
+  // Under voice, defence 2 is skipped and the shot is taken with the overlay
+  // still up. Hiding it would be a visible flash — the overlay is the entire
+  // screen at that point — and this capture now happens while the user is
+  // still speaking, so there is no moment when a blink would go unnoticed.
+  // Measured before relying on it: with content protection on, a full-screen
+  // dimming overlay changed the captured frame's mean luminance by 0.00.
+  const hideForShot = !voiceMode;
   const overlayWasVisible = overlay?.isVisible() ?? false;
-  if (overlayWasVisible) overlay.hide();
+  if (overlayWasVisible && hideForShot) overlay.hide();
 
   // One compositor frame so the hide actually lands before we grab pixels.
-  await new Promise((r) => setTimeout(r, 90));
+  if (hideForShot) await new Promise((r) => setTimeout(r, 90));
 
   try {
     const sources = await desktopCapturer.getSources({
@@ -254,7 +261,8 @@ async function captureActiveScreen() {
     // answer lands blanks the display for the whole model call — the wait
     // looked like a crash. The frame is already captured by this point, so
     // showing it again cannot contaminate the shot.
-    if (overlayWasVisible && voiceMode) {
+    // Only meaningful when the shot did hide it; under voice it never left.
+    if (overlayWasVisible && hideForShot && voiceMode) {
       overlay.showInactive();
       // Showing a window again drops it out of the topmost band, so without
       // this it returns behind whatever you were working in — present, drawing
@@ -272,7 +280,7 @@ async function captureActiveScreen() {
     // Outside voice, restore only on failure — on success the overlay is about
     // to be shown again with the answer, and flashing the previous one first
     // is noise.
-    if (overlayWasVisible) overlay.showInactive();
+    if (overlayWasVisible && hideForShot) overlay.showInactive();
     throw err;
   }
 }
