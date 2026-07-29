@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -326,26 +327,29 @@ func HandleTranscribe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleTrails lists the library, optionally filtered by ?q=.
+// HandleTrails lists the library on GET, and saves on POST.
 //
-// Read-only by design. The hosted deployment runs without persistent storage,
-// so accepting a save would mean showing someone "Saved ✓" for something that
-// disappears when the instance recycles — a visible lie rather than an honest
-// limitation. The seeded trails still demonstrate what matters: ask a question
-// someone already answered and it returns instantly, without a model call.
+// Saving is refused when the store is in-process. On a host that recycles
+// instances, accepting one means showing someone "Saved for the team" for
+// something that disappears within minutes — a visible lie, where refusing is
+// an honest limitation. With shared storage configured the whole point of the
+// product works, so the endpoint follows the store rather than a hardcoded
+// decision, and the response says which mode it's in.
 func HandleTrails(w http.ResponseWriter, r *http.Request) {
 	setCORS(w)
-	if r.Method == http.MethodOptions {
+	switch r.Method {
+	case http.MethodOptions:
 		w.WriteHeader(http.StatusNoContent)
-		return
+	case http.MethodGet:
+		listTrails(w, r)
+	case http.MethodPost:
+		saveTrail(w, r)
+	default:
+		writeErr(w, http.StatusMethodNotAllowed, "Use GET or POST.", "")
 	}
-	if r.Method != http.MethodGet {
-		writeErr(w, http.StatusMethodNotAllowed,
-			"This deployment has a read-only trail library. Saving needs persistent storage.",
-			"read_only")
-		return
-	}
+}
 
+func listTrails(w http.ResponseWriter, r *http.Request) {
 	a := get()
 	trails, err := a.store.List()
 	if err != nil {
@@ -359,8 +363,111 @@ func HandleTrails(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"trails":    trails,
 		"storeKind": a.storeKind,
-		"readOnly":  true,
+		"readOnly":  a.storeKind != "shared",
 	})
+}
+
+type saveTrailRequest struct {
+	Title    string `json:"title"`
+	Question string `json:"question"`
+	App      string `json:"app"`
+	Steps    []Step `json:"steps"`
+}
+
+// currentUser is mocked — see README.
+var currentUser = Author{ID: "u_you", Name: "You", Initials: "YO", Color: "#3b82f6"}
+
+func saveTrail(w http.ResponseWriter, r *http.Request) {
+	a := get()
+
+	if a.storeKind != "shared" {
+		writeErr(w, http.StatusServiceUnavailable,
+			"This deployment has no persistent storage, so trails can't be saved. Browsing and replaying still works.",
+			"read_only")
+		return
+	}
+
+	var body saveTrailRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxFrameBytes)).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "Malformed request body.", "")
+		return
+	}
+	if body.Title == "" || body.Question == "" || len(body.Steps) == 0 {
+		writeErr(w, http.StatusBadRequest,
+			"A trail needs a title, the original question, and at least one step.", "")
+		return
+	}
+
+	app := body.App
+	if app == "" {
+		app = "Unknown"
+	}
+	for i := range body.Steps {
+		if body.Steps[i].ID == "" {
+			body.Steps[i].ID = fmt.Sprintf("s%d", i+1)
+		}
+	}
+
+	trail := Trail{
+		ID:        newID("tr_"),
+		Title:     body.Title,
+		Question:  body.Question,
+		Aliases:   deriveAliases(body.Question, body.Title),
+		App:       app,
+		Steps:     body.Steps,
+		Author:    currentUser,
+		CreatedAt: time.Now().UnixMilli(),
+	}
+
+	if err := a.store.Save(trail); err != nil {
+		log.Printf("[cairn] store save failed: %v", err)
+		writeErr(w, http.StatusInternalServerError, "Couldn't save that trail.", "")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"trail": trail})
+}
+
+// newID is time-ordered with a random tail, so ids sort roughly by age without
+// needing a counter shared between instances.
+func newID(prefix string) string {
+	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 7)
+	for i := range b {
+		b[i] = alphabet[rand.IntN(len(alphabet))]
+	}
+	return prefix + strconv.FormatInt(time.Now().UnixMilli(), 36) + string(b)
+}
+
+// deriveAliases makes a saved trail findable by someone who phrases the problem
+// differently. The title is usually a cleaner statement of the same intent than
+// the question was, so each becomes an alias for the other.
+func deriveAliases(question, title string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(s string) {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+
+	add(title)
+	add(question)
+
+	// Strip interrogative framing so "how do I export a frame" also matches a
+	// later "export a frame".
+	lower := strings.ToLower(question)
+	for _, prefix := range []string{
+		"how do i ", "how can i ", "how would i ", "how do you ",
+		"where is ", "where do i ", "what is ", "what's ", "why does ", "why is ",
+	} {
+		if strings.HasPrefix(lower, prefix) {
+			add(strings.TrimPrefix(lower, prefix))
+			break
+		}
+	}
+	return out
 }
 
 // Mux wires the handlers for a normal long-running process. Serverless

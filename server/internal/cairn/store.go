@@ -227,13 +227,36 @@ func (u *upstashStore) RecordReuse(id string) error {
 
 /* ------------------------------------------------------------------ picker */
 
+// upstashCredentials finds the REST URL and token under whichever names the
+// host injected them.
+//
+// Vercel's integrations don't agree on this. Connecting Upstash directly gives
+// UPSTASH_REDIS_REST_*, while the KV marketplace integration gives
+// KV_REST_API_*, and which you get depends on the route taken through the
+// dashboard. Checking both is a few lines and removes a failure that otherwise
+// presents as storage silently not working — the server starts fine, reports
+// itself healthy, and quietly keeps everything in memory.
+//
+// Deliberately ignores KV_URL and REDIS_URL: those are TCP connection strings
+// for a Redis client, not the HTTP REST endpoint this talks to.
+func upstashCredentials() (url, token string) {
+	for _, pair := range [][2]string{
+		{"UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"},
+		{"KV_REST_API_URL", "KV_REST_API_TOKEN"},
+	} {
+		if u, t := os.Getenv(pair[0]), os.Getenv(pair[1]); u != "" && t != "" {
+			return u, t
+		}
+	}
+	return "", ""
+}
+
 func newStore() (TrailStore, string) {
-	url := os.Getenv("UPSTASH_REDIS_REST_URL")
-	token := os.Getenv("UPSTASH_REDIS_REST_TOKEN")
-	if url != "" && token != "" {
+	if url, token := upstashCredentials(); url != "" {
 		return newUpstashStore(url, token), "shared"
 	}
 	// Honest label: on a single long-running instance this persists for the
-	// life of the process, which is not the same as durable.
+	// life of the process, which is not the same as durable — and on a host
+	// that recycles instances, not even that.
 	return newMemoryStore(), "in-process"
 }
