@@ -111,22 +111,44 @@ let tray = null;
 /* --------------------------------------------------------------- windows */
 
 /**
- * The overlay spans the entire virtual desktop — the union of every monitor —
- * rather than one screen. The probe found two displays at different scale
- * factors, and a single-screen overlay would simply fail to draw on the other
- * one.
+ * The rectangle the overlay occupies: exactly one display.
+ *
+ * It used to span the whole virtual desktop as a single window, which is where
+ * a long-standing misalignment came from. A window gets one DPI context, and
+ * these two monitors do not share a scale factor — 1.25 on the laptop against
+ * 1.0 on the external — so a single window covering both could map its CSS
+ * pixels onto one of them or the other, never both. Everything drew correctly
+ * on one screen and landed offset on the other, which put the cursor beside the
+ * control instead of on it.
+ *
+ * One window, one screen, one scale factor, and the coordinate maths reduces to
+ * a multiply. It also answers the question directly: the dim covers the whole
+ * screen the question was asked on, and no part of any other.
  */
-function virtualBounds() {
-  const displays = screen.getAllDisplays();
-  const left = Math.min(...displays.map((d) => d.bounds.x));
-  const top = Math.min(...displays.map((d) => d.bounds.y));
-  const right = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
-  const bottom = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
-  return { x: left, y: top, width: right - left, height: bottom - top };
+function stageBounds() {
+  return { ...activeDisplay().bounds };
+}
+
+/**
+ * Puts the overlay over one whole screen.
+ *
+ * Verified with a per-monitor-DPI-aware probe rather than by eye: asking for
+ * the laptop's 1536x960 device-independent pixels produces a window measuring
+ * 1920x1200 true physical pixels at that screen's origin — the whole panel,
+ * exactly. A DPI-unaware probe reports the same window as 1536x960, which
+ * looks like a bug and is not one; anything checking this has to declare its
+ * own DPI awareness first or it will be measuring Windows' compatibility
+ * scaling instead of the window.
+ */
+function fitOverlay() {
+  if (!overlay) return null;
+  const b = stageBounds();
+  overlay.setBounds(b);
+  return b;
 }
 
 function createOverlay() {
-  const b = virtualBounds();
+  const b = stageBounds();
   overlay = new BrowserWindow({
     ...b,
     transparent: true,
@@ -499,8 +521,9 @@ ipcMain.handle("cairn:save-trail", async (_e, trail) => {
 /** Hands the overlay a step to draw, and reveals it. */
 ipcMain.on("cairn:draw", (_e, payload) => {
   if (!overlay) return;
-  const b = virtualBounds();
-  overlay.setBounds(b);
+  // The window is the screen, so the renderer's virtual origin is its own
+  // origin and every offset it computes comes out zero.
+  const b = fitOverlay();
   overlay.showInactive();
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.webContents.send("cairn:draw", { ...payload, virtual: b });
@@ -517,8 +540,7 @@ ipcMain.on("cairn:voice-mode", (_e, on) => {
   voiceMode = Boolean(on);
   if (voiceMode) {
     hud?.hide();
-    const b = virtualBounds();
-    overlay?.setBounds(b);
+    const b = fitOverlay();
     overlay?.showInactive();
     overlay?.setAlwaysOnTop(true, "screen-saver");
 
@@ -567,7 +589,7 @@ ipcMain.handle("cairn:listen-token", async () => {
 /** Which screen the voice experience should draw on. */
 ipcMain.handle("cairn:active-screen", () => {
   const display = activeDisplay();
-  return { bounds: display.bounds, virtual: virtualBounds() };
+  return { bounds: display.bounds, virtual: stageBounds() };
 });
 
 /** Stage of the voice flow: listening → heard → thinking. */
@@ -807,11 +829,13 @@ if (!app.requestSingleInstanceLock()) {
      */
     if (!process.argv.includes("--autostart")) showHud();
 
-    // Keep the overlay covering the desktop when monitors are added, removed,
-    // or rearranged mid-session.
-    screen.on("display-added", () => overlay?.setBounds(virtualBounds()));
-    screen.on("display-removed", () => overlay?.setBounds(virtualBounds()));
-    screen.on("display-metrics-changed", () => overlay?.setBounds(virtualBounds()));
+    // Monitors coming, going or being rescaled mid-session. The overlay is
+    // re-fitted to whichever screen is current; a display that has just had its
+    // scale factor changed is the one most likely to be wrong.
+    const refit = () => fitOverlay();
+    screen.on("display-added", refit);
+    screen.on("display-removed", refit);
+    screen.on("display-metrics-changed", refit);
   });
 
   // No dock, no taskbar, no window on launch: Cairn lives in the tray and

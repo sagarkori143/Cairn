@@ -118,7 +118,9 @@ cd app && npm run dist      # → app/dist/Cairn-0.1.0-portable.exe
 
 **Cairn keeps itself out of its own screenshots.** Without that, the model reads the HUD as part of your screen and answers about Cairn instead of your work — it will cheerfully point its own cursor at its own window. Two independent defences: `setContentProtection(true)` excludes both windows from capture at the OS level, and the overlay is hidden outright before the grab, since a full-desktop dimming layer would ruin the frame if the first defence ever regressed.
 
-**The overlay spans the whole virtual desktop, not one screen.** Coordinates come back normalised against a screenshot of a single display, so they're mapped into absolute desktop space and then offset by the virtual origin — which is negative when a monitor sits to the left of the primary. Getting this wrong puts the ring on the right spot of the wrong screen.
+**The overlay covers exactly one screen, and that is a DPI decision.** It used to span the whole virtual desktop as a single window, which cannot be right on a machine whose monitors have different scale factors: a window gets one DPI context, so covering a 1.25-scale laptop and a 1.0-scale external at once meant its CSS pixels could line up with one of them or the other, never both. Everything drew correctly on one screen and landed offset on the other, which is how a cursor ends up beside a control rather than on it.
+
+Now it is fitted to the display the question was asked on. Coordinates arrive normalised against a screenshot of that same display, so the mapping is a multiply and both offsets are zero. Verified rather than assumed: asking for the laptop's 1536×960 device-independent pixels produces a window measuring 1920×1200 true physical pixels. If you go to check that yourself, make the checking process per-monitor DPI aware first — a DPI-unaware one reports that same window as 1536×960 and invents a bug that isn't there.
 
 ## Voice
 
