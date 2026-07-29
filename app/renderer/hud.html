@@ -555,8 +555,11 @@
         level.classList.add("on");
         err.style.display = "none";
 
-        // Deepgram takes the key as a WebSocket subprotocol, since browsers
-        // can't set an Authorization header on a socket.
+        // Browsers can't set an Authorization header on a socket, so the
+        // credential rides in as a subprotocol. Which word precedes it depends
+        // on what the server managed to issue — a session bearer token or a
+        // short-lived key — so the server names the scheme rather than the
+        // client assuming one.
         const params = new URLSearchParams({
           model: token.model || "nova-3",
           smart_format: "true",
@@ -564,7 +567,10 @@
           interim_results: "true",
           endpointing: "600",
         });
-        socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${params}`, ["token", token.key]);
+        socket = new WebSocket(
+          `wss://api.deepgram.com/v1/listen?${params}`,
+          [token.scheme || "token", token.key],
+        );
 
         // Declared with `var` so the level-meter loop below, which lives in the
         // same function scope but runs after these are assigned, can read them.
