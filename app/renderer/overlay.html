@@ -564,13 +564,32 @@
         replayWrap.style.left = `${screenBox.cx}px`;
         replayWrap.style.top = `${screenBox.cy}px`;
 
+        /*
+         * The marks are bounded at both ends, not just the small one.
+         *
+         * Only a floor was set, so the ripples and the spotlight grew with
+         * whatever box came back — and a model asked to point at something
+         * inside a large panel often returns the panel. A ring the size of
+         * half the screen, pulsing out to nearly twice that, stops reading as
+         * "here" and starts reading as "somewhere in this general area", which
+         * is both worse to look at and less useful than a tight mark near the
+         * middle of the same box.
+         *
+         * The ceilings are a share of the display as well as an absolute, so a
+         * 4K screen doesn't get proportionally tiny marks and a small laptop
+         * doesn't get swamped.
+         */
+        const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
         holeShape.setAttribute("cx", cx);
         holeShape.setAttribute("cy", cy);
-        holeShape.setAttribute("rx", Math.max(w * 0.95, 62));
-        holeShape.setAttribute("ry", Math.max(h * 1.3, 46));
+        holeShape.setAttribute("rx", clamp(w * 0.95, 62, Math.min(260, bounds.width * 0.16)));
+        holeShape.setAttribute("ry", clamp(h * 1.3, 46, Math.min(200, bounds.height * 0.22)));
         dim.style.opacity = "1";
 
-        const size = Math.max(w, h, 48);
+        // Ripples animate out to 1.9x, so this is the resting size, not the
+        // widest the ring ever gets.
+        const size = clamp(Math.max(w, h), 48, Math.min(150, bounds.width * 0.1));
         ripples.forEach((r) => {
           Object.assign(r.style, {
             left: `${cx}px`, top: `${cy}px`,
