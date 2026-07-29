@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld("cairn", {
    */
   transcribe: (audio, mimeType) => ipcRenderer.invoke("cairn:transcribe", { audio, mimeType }),
 
+  /** Save the current answer as a trail the team inherits. */
+  saveTrail: (trail) => ipcRenderer.invoke("cairn:save-trail", trail),
+
   /** Draw a step on the real desktop. */
   draw: (payload) => ipcRenderer.send("cairn:draw", payload),
   clear: () => ipcRenderer.send("cairn:clear"),

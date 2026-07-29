@@ -232,6 +232,7 @@
         <div id="say"><div id="num">1</div><div id="text"></div></div>
         <div id="nav">
           <div id="pips"></div>
+          <button id="save" class="btn">Save as trail</button>
           <button id="back" class="btn">Back</button>
           <button id="next" class="btn">Next</button>
         </div>
@@ -248,6 +249,9 @@
       let result = null;
       let index = 0;
       let busy = false;
+      // Kept because a saved trail stores the original wording, which is the
+      // strongest key recall has for matching it later.
+      let lastQuestion = "";
 
       /** Keeps the window exactly as tall as its contents. */
       function fit() {
@@ -301,6 +305,8 @@
 
         back.disabled = index === 0;
         next.disabled = index >= result.steps.length - 1;
+        // Only a fresh answer is worth saving; a recalled one is already saved.
+        saveBtn.style.display = memory ? "none" : "";
         answer.style.display = "block";
         err.style.display = "none";
         fit();
@@ -326,6 +332,10 @@
         const question = q.value.trim();
         if (!question || busy) return;
         busy = true;
+        lastQuestion = question;
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save as trail";
+        saveBtn.style.color = "";
         askBtn.disabled = true;
         askBtn.textContent = "…";
         err.style.display = "none";
@@ -493,6 +503,35 @@
       }
 
       mic.addEventListener("click", startRecording);
+
+      /*
+       * Saving is only offered on a fresh answer. A recalled trail is already
+       * in the library, so the button would either duplicate it or do nothing —
+       * both worse than not being there.
+       */
+      const saveBtn = $("save");
+
+      saveBtn.addEventListener("click", async () => {
+        if (!result || result.source !== "model") return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving…";
+
+        const res = await window.cairn.saveTrail({
+          title: result.title,
+          question: lastQuestion,
+          app: result.app,
+          steps: result.steps,
+        });
+
+        if (res.ok) {
+          saveBtn.textContent = "Saved ✓";
+          saveBtn.style.color = "var(--moss)";
+        } else {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save as trail";
+          showError(res.error);
+        }
+      });
 
       askBtn.addEventListener("click", ask);
       back.addEventListener("click", () => { if (index > 0) { index--; render(); } });

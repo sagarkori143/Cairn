@@ -288,6 +288,29 @@ ipcMain.handle("cairn:ask", async (_e, { question, frame }) => {
   }
 });
 
+/**
+ * Promotes a live answer into team memory.
+ *
+ * This is the half that makes Cairn more than a screen reader: the next person
+ * to hit the same wall gets this back instantly, without a model call. The
+ * server refuses if it has no persistent storage, so the client doesn't need to
+ * know which mode it's in — it offers the save and reports what came back.
+ */
+ipcMain.handle("cairn:save-trail", async (_e, trail) => {
+  try {
+    const res = await fetch(`${SERVER}/api/trails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(trail),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
+    return { ok: true, trail: data.trail };
+  } catch {
+    return { ok: false, error: `Can't reach Cairn's server at ${SERVER}.` };
+  }
+});
+
 /** Hands the overlay a step to draw, and reveals it. */
 ipcMain.on("cairn:draw", (_e, payload) => {
   if (!overlay) return;
