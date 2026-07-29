@@ -218,79 +218,40 @@ async function captureActiveScreen() {
 /* ------------------------------------------------------------ transcribe */
 
 /**
- * Speech-to-text, entirely on this machine.
+ * Speech-to-text, via the server.
  *
- * Electron ships without Google's API keys, so the browser SpeechRecognition
- * API — which is what the web version uses — fails here. Rather than send audio
- * to a paid service, Cairn runs Whisper locally.
+ * This started as local Whisper, which was appealing — audio never leaving the
+ * machine is a genuinely good property for a tool that already watches your
+ * screen. It was replaced because accuracy came first: the small models that
+ * are practical to ship mistranscribed accented English badly enough to be
+ * unusable, and a misheard question is worse than a slow one. It quietly
+ * produces a confident answer to something you never asked.
  *
- * That turns a limitation into the better answer for a tool like this. Cairn
- * already watches your screen; asking users to also stream their voice to a
- * third party is a lot to ask. Nothing recorded here ever leaves the machine —
- * only the resulting text, and only then alongside a screenshot they chose to
- * send.
+ * Transcription runs server-side rather than here for the same reason the
+ * vision call does: an Electron app is a zip archive with a different
+ * extension, so any key shipped inside it is public. The client records audio
+ * and posts the bytes; the credentials stay on the server.
  *
- * `whisper-tiny.en` is the deliberate pick: ~40MB and roughly a second for a
- * short question. Larger models are more accurate on accents and noise, but the
- * questions people ask a screen assistant are short and domain-obvious, and
- * doubling the wait to better resolve a word the vision model can infer from
- * context anyway is a bad trade.
+ * The audio goes over the wire in its original container. Deepgram sniffs the
+ * format itself, so there is no resampling or transcoding to get wrong on this
+ * side — which removes an entire class of bug that local inference required us
+ * to own.
  */
-let whisper = null;
-let whisperLoading = null;
-
-async function getWhisper(onProgress) {
-  if (whisper) return whisper;
-  if (whisperLoading) return whisperLoading;
-
-  whisperLoading = (async () => {
-    // @huggingface/transformers is ESM-only; this file is CommonJS, so it has
-    // to come in through a dynamic import.
-    const { pipeline, env } = await import("@huggingface/transformers");
-
-    // Keep weights beside the app's own data so they survive restarts and are
-    // removed with the app, rather than landing in a global npm cache.
-    env.cacheDir = path.join(app.getPath("userData"), "models");
-    env.allowRemoteModels = true;
-
-    whisper = await pipeline("automatic-speech-recognition", "Xenova/whisper-tiny.en", {
-      dtype: "q8", // quantised: about a quarter the size, no meaningful accuracy loss here
-      progress_callback: (p) => {
-        if (p.status === "progress" && onProgress) {
-          onProgress({ file: p.file, percent: Math.round(p.progress ?? 0) });
-        }
-      },
+ipcMain.handle("cairn:transcribe", async (_e, { audio, mimeType }) => {
+  try {
+    const res = await fetch(`${SERVER}/api/transcribe`, {
+      method: "POST",
+      headers: { "Content-Type": mimeType || "audio/webm" },
+      body: Buffer.from(audio),
     });
-    return whisper;
-  })();
-
-  try {
-    return await whisperLoading;
-  } finally {
-    whisperLoading = null;
-  }
-}
-
-ipcMain.handle("cairn:transcribe", async (event, { samples }) => {
-  try {
-    const model = await getWhisper((p) => event.sender.send("cairn:model-progress", p));
-    // The renderer already resampled to 16kHz mono, which is what Whisper wants.
-    const out = await model(new Float32Array(samples));
-    const text = (out?.text ?? "").trim();
-    return { ok: true, text };
-  } catch (err) {
-    console.error("[cairn] transcription failed:", err);
-    return { ok: false, error: "Couldn't make out that audio. Try typing instead." };
-  }
-});
-
-/** Lets the HUD warm the model up before the first question rather than during it. */
-ipcMain.handle("cairn:warm-whisper", async (event) => {
-  try {
-    await getWhisper((p) => event.sender.send("cairn:model-progress", p));
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: String(err) };
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
+    return { ok: true, text: data.text ?? "", confidence: data.confidence ?? 0 };
+  } catch {
+    return {
+      ok: false,
+      error: `Can't reach Cairn's server at ${SERVER}. Type your question instead.`,
+    };
   }
 });
 

@@ -19,17 +19,11 @@ contextBridge.exposeInMainWorld("cairn", {
   serverUrl: () => ipcRenderer.invoke("cairn:server-url"),
 
   /**
-   * Transcribe 16kHz mono audio locally. Takes a plain array rather than a
-   * Float32Array because structured clone across the IPC boundary is simpler
-   * and the payload is small — a few seconds of speech, not a file.
+   * Transcribe recorded audio. Takes the raw bytes in whatever container the
+   * recorder produced — the server identifies the format, so nothing needs
+   * decoding or resampling on this side.
    */
-  transcribe: (samples) => ipcRenderer.invoke("cairn:transcribe", { samples }),
-  warmWhisper: () => ipcRenderer.invoke("cairn:warm-whisper"),
-  onModelProgress: (fn) => {
-    const h = (_e, p) => fn(p);
-    ipcRenderer.on("cairn:model-progress", h);
-    return () => ipcRenderer.off("cairn:model-progress", h);
-  },
+  transcribe: (audio, mimeType) => ipcRenderer.invoke("cairn:transcribe", { audio, mimeType }),
 
   /** Draw a step on the real desktop. */
   draw: (payload) => ipcRenderer.send("cairn:draw", payload),

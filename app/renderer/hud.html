@@ -217,7 +217,7 @@
         <button id="ask" class="btn primary">Ask</button>
       </div>
       <div id="hint">
-        <kbd>Enter</kbd> to ask · <kbd>Esc</kbd> to dismiss · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> from anywhere
+        <kbd>Speak</kbd> then check the text · <kbd>Enter</kbd> to ask · <kbd>Esc</kbd> to dismiss · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> from anywhere
       </div>
       <!-- Level meter, visible only while recording, so you can see it's hearing you. -->
       <div id="level"><div id="levelFill"></div></div>
@@ -377,21 +377,6 @@
       let stream = null;
       let recording = false;
 
-      /** Whisper wants 16kHz mono; whatever the mic gave us gets resampled. */
-      async function toWhisperSamples(blob) {
-        const ctx = new AudioContext();
-        const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-        await ctx.close();
-
-        const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
-        const src = offline.createBufferSource();
-        src.buffer = decoded;
-        src.connect(offline.destination);
-        src.start();
-        const out = await offline.startRendering();
-        return Array.from(out.getChannelData(0));
-      }
-
       async function startRecording() {
         if (recording) return stopRecording();
         try {
@@ -421,20 +406,34 @@
           fit();
 
           try {
-            const samples = await toWhisperSamples(new Blob(chunks, { type: "audio/webm" }));
-            // Under ~0.4s is almost always a misfire — a stray click, not a question.
-            if (samples.length < 6400) {
+            const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+            // Anything this small is a misfire — a stray click, not a question.
+            if (blob.size < 2048) {
               micLabel.textContent = "Speak";
               recording = false;
               return;
             }
-            const res = await window.cairn.transcribe(samples);
+            // Ship the container as-is; the server identifies the format.
+            const buf = await blob.arrayBuffer();
+            const res = await window.cairn.transcribe(buf, blob.type);
             micLabel.textContent = "Speak";
             recording = false;
             if (!res.ok) return showError(res.error);
             if (!res.text) return showError("Didn't catch that — try again, or type it.");
+
+            /*
+             * Put the transcription in the box and stop there, rather than
+             * asking immediately.
+             *
+             * Local speech recognition gets words wrong, and asking straight
+             * away turns a misheard word into a confident answer to a question
+             * you never asked — plus a paid model call for it. One keypress to
+             * confirm is a cheap price for seeing what it heard. The text is
+             * selected so a bad guess can be typed straight over.
+             */
             q.value = res.text;
-            ask(); // heard you; go straight to answering
+            q.focus();
+            q.select();
           } catch {
             micLabel.textContent = "Speak";
             recording = false;
@@ -494,12 +493,6 @@
       }
 
       mic.addEventListener("click", startRecording);
-
-      // Model download progress — the first run fetches ~40MB of weights, and
-      // silence during that reads as the app being broken.
-      window.cairn.onModelProgress((p) => {
-        if (p.percent < 100) micLabel.textContent = `Loading voice ${p.percent}%`;
-      });
 
       askBtn.addEventListener("click", ask);
       back.addEventListener("click", () => { if (index > 0) { index--; render(); } });
