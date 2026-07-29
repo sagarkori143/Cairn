@@ -257,11 +257,26 @@
       let token = 0;
       let captionsOn = localStorage.getItem("cairn.captions") !== "0";
 
-      /** Keeps the window exactly as tall as its contents. */
-      function fit() {
-        requestAnimationFrame(() =>
-          window.cairn.resizeHud($("shell").offsetHeight + 24),
-        );
+      /**
+       * Keeps the window exactly as tall as its contents.
+       *
+       * `announce` is for the summon path, where the panel is still hidden and
+       * main is waiting to be told the size is settled before showing it —
+       * sending it from inside this callback means the resize is already in
+       * main's queue ahead of it.
+       */
+      function fit({ announce = false } = {}) {
+        const send = () => {
+          window.cairn.resizeHud($("shell").offsetHeight + 24);
+          if (announce) window.cairn.hudReady();
+        };
+
+        // Reading offsetHeight forces layout, so the measurement is good
+        // immediately — and the summon path cannot wait for a frame, because a
+        // hidden window may not be given one until it is shown, which is the
+        // very thing this is meant to happen before.
+        if (announce) send();
+        else requestAnimationFrame(send);
       }
 
       function clearAnswer() {
@@ -949,6 +964,9 @@
         // Speak is one click away from here — have the credential ready before
         // it is asked for.
         prefetchListenToken();
+        // Reset done. Tell main the panel is the size it will actually be, so
+        // it can be put on screen already settled rather than resizing in view.
+        fit({ announce: true });
       });
 
       fit();

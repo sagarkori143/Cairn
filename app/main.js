@@ -143,21 +143,70 @@ function createHud() {
  */
 let voiceMode = false;
 
+/*
+ * Which screen this question belongs to.
+ *
+ * Fixed when the panel opens, and used for everything that follows: the
+ * screenshot, the dim, the stage, the pointing. Each of those used to ask
+ * independently which display the cursor was nearest, so moving the mouse to
+ * another monitor mid-question could dim one screen and point at another. The
+ * screen you summoned Cairn on is the one you were looking at.
+ */
+let activeDisplayId = null;
+
+function activeDisplay() {
+  return (
+    screen.getAllDisplays().find((d) => d.id === activeDisplayId) ??
+    screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  );
+}
+
 /** Parks the HUD near the bottom of whichever screen the mouse is on. */
 function positionHud() {
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
+  activeDisplayId = display.id;
   const { x, y, width, height } = display.workArea;
   const [w, h] = hud.getSize();
   hud.setPosition(Math.round(x + (width - w) / 2), Math.round(y + height - h - 60));
 }
 
+/*
+ * Summoning is two steps, because it used to be one.
+ *
+ * The panel was shown first and reset afterwards, so it arrived at whatever
+ * size the last answer had left it, then cleared, resized and moved to the
+ * cursor's screen — visibly, twice, before settling. Now the reset happens
+ * while it is still hidden and it is only shown once the renderer says the
+ * size is final.
+ */
+let pendingShow = null;
+
 function showHud() {
   if (!hud) return;
+
+  if (hud.isVisible()) {
+    hud.focus();
+    hud.webContents.send("cairn:summon");
+    return;
+  }
+
+  hud.webContents.send("cairn:summon");
+
+  // A missing reply must never leave the panel unopenable, so this is a
+  // backstop rather than the normal route.
+  clearTimeout(pendingShow);
+  pendingShow = setTimeout(revealHud, 220);
+}
+
+function revealHud() {
+  clearTimeout(pendingShow);
+  pendingShow = null;
+  if (!hud || hud.isVisible()) return;
+
   positionHud();
   hud.showInactive(); // appear without stealing focus…
   hud.focus(); // …then take it deliberately, so typing lands here
-  hud.webContents.send("cairn:summon");
   syncEscapeCapture();
 }
 
@@ -219,8 +268,7 @@ function syncEscapeCapture() {
  *      and wreck the model's reading of it.
  */
 async function captureActiveScreen() {
-  const cursor = screen.getCursorScreenPoint();
-  const display = screen.getDisplayNearestPoint(cursor);
+  const display = activeDisplay();
 
   // Under voice, defence 2 is skipped and the shot is taken with the overlay
   // still up. Hiding it would be a visible flash — the overlay is the entire
@@ -419,7 +467,7 @@ ipcMain.on("cairn:voice-mode", (_e, on) => {
     // ask which screen it is on and send its own first frame. Everything after
     // this — a token, a socket, the microphone — takes long enough that the
     // click needs to have visibly landed before any of it starts.
-    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const display = activeDisplay();
     overlay?.webContents.send("cairn:stage", {
       kind: "listening",
       level: 0,
@@ -457,7 +505,7 @@ ipcMain.handle("cairn:listen-token", async () => {
 
 /** Which screen the voice experience should draw on. */
 ipcMain.handle("cairn:active-screen", () => {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const display = activeDisplay();
   return { bounds: display.bounds, virtual: virtualBounds() };
 });
 
@@ -497,11 +545,30 @@ ipcMain.on("cairn:click-through", (_e, ignore) => {
 
 ipcMain.on("cairn:dismiss", hideAll);
 
+ipcMain.on("cairn:hud-ready", revealHud);
+
 ipcMain.on("cairn:resize-hud", (_e, { height }) => {
   if (!hud) return;
-  const [w] = hud.getSize();
-  hud.setSize(w, Math.min(Math.max(Math.round(height), 140), 620));
-  positionHud();
+
+  const next = Math.min(Math.max(Math.round(height), 140), 620);
+  const bounds = hud.getBounds();
+  if (bounds.height === next) return;
+
+  /*
+   * setBounds, not setSize.
+   *
+   * A window created with resizable:false has its minimum and maximum size
+   * pinned to the size it was made at, and setSize honours that — so the panel
+   * could grow to fit an answer but never shrink back, not even to the height
+   * it started at. Every later question inherited the tallest panel ever shown,
+   * and summoning it dropped a box of empty glass onto the screen. setBounds
+   * is not bound by those limits, and the window stays non-resizable by hand.
+   */
+  hud.setBounds({ ...bounds, height: next });
+
+  // While hidden there is nothing to keep in place, and revealHud positions it
+  // on the way in — repositioning here would only move a window nobody sees.
+  if (hud.isVisible()) positionHud();
 });
 
 ipcMain.handle("cairn:server-url", () => SERVER);

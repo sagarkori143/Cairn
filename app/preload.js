@@ -71,6 +71,9 @@ contextBridge.exposeInMainWorld("cairn", {
   dismiss: () => ipcRenderer.send("cairn:dismiss"),
   resizeHud: (height) => ipcRenderer.send("cairn:resize-hud", { height }),
 
+  /** Reset and measured — safe to put the panel on screen now. */
+  hudReady: () => ipcRenderer.send("cairn:hud-ready"),
+
   /** Main → renderer. Returns an unsubscribe so listeners can't stack up. */
   onSummon: (fn) => {
     const h = () => fn();
