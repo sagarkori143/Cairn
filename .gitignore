@@ -3,7 +3,7 @@ node_modules/
 .pnp
 .pnp.*
 
-# secrets — the Anthropic key lives here and must never be committed
+# secrets â€” the Anthropic key lives here and must never be committed
 .env
 .env.*
 !.env.example
@@ -19,7 +19,7 @@ release/
 app/dist/
 app/release/
 
-# local model cache — Whisper weights are downloaded, not committed
+# local model cache â€” Whisper weights are downloaded, not committed
 app/models/
 .cache/
 
@@ -44,5 +44,7 @@ next-env.d.ts
 .vercel
 
 # go build output
-server/cairn-server.exe
-server/*.exe
+
+# compiled go binaries, wherever they land
+*.exe
+!app/dist/*.exe
