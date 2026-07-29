@@ -1,0 +1,82 @@
+# Builds the Windows client and publishes it to a rolling "latest" release.
+#
+# Triggers only on changes under app/ — the Go server deploys itself via Vercel,
+# and rebuilding a 85MB binary because a handler changed would be waste.
+#
+# Notably this needs no secrets. The client holds no API keys (an Electron app
+# is a zip archive with a different extension, so anything inside it is public),
+# which means a fork or a pull request can build it without access to anything.
+
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/build-app.yml"
+  # Lets you rebuild from the Actions tab without pushing anything.
+  workflow_dispatch:
+
+# Required to create and update releases.
+permissions:
+  contents: write
+
+concurrency:
+  # A newer push makes an in-flight build pointless — the release only ever
+  # holds one binary.
+  group: build-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build portable exe
+        working-directory: app
+        run: npm run dist
+
+      - name: Show what was built
+        working-directory: app
+        shell: pwsh
+        run: Get-ChildItem dist -File | Select-Object Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}}
+
+      - name: Publish to the rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          # A moving tag on purpose: there is one current build, and its
+          # download URL should never change.
+          tag_name: latest
+          name: Cairn — latest build
+          # Marked as a prerelease so it reads as "newest build" rather than a
+          # curated version. Tag a v* release separately when you want one.
+          prerelease: true
+          files: app/dist/Cairn-portable.exe
+          body: |
+            Automatic build of the Windows client from `${{ github.sha }}`.
+
+            **Download `Cairn-portable.exe` below.** No installer — double-click
+            to run, delete the file to remove it.
+
+            Windows will warn that it can't verify the publisher, because the
+            binary is unsigned. Choose **More info → Run anyway**. Signing needs
+            a certificate at roughly $200/year, which this doesn't have.
+
+            Once running, Cairn sits in the system tray. Press `Ctrl+Alt+C` from
+            inside any application to summon it.
+
+            Talks to the deployed API, so there is nothing to configure and no
+            keys to supply.
