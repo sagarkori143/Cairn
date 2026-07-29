@@ -124,23 +124,25 @@ It started as local Whisper, which was appealing — audio never leaving the mac
 
 For the same reason, the transcription now lands in the input box and waits rather than asking immediately. One keystroke to confirm is cheap next to a wrong answer you also paid for.
 
-## The trail library is read-only, and that was measured
+## Storage, and how the requirement was established
 
-The hosted deployment can't hold state, so saving is disabled rather than left to fail quietly.
+Trails need to outlive the process, and finding out whether they did was worth measuring rather than assuming.
 
-I checked rather than assumed. Every recall hit increments a trail's `reuseCount`, which makes instance identity observable from outside: three consecutive requests took it 7 → 8 → 9, so one instance was serving them. After five minutes idle it was back to 7, and after seven minutes still 7 — the instance had been recycled and its memory discarded.
+Every recall hit increments a trail's `reuseCount`, which makes instance identity observable from outside. Running the deployment on in-process memory: three consecutive requests took it 7 → 8 → 9, so one instance was serving them all. Five minutes idle and it was back to 7; seven minutes, still 7. The instance had been recycled and its memory discarded.
 
-That means a save would show someone "Saved for the team" for something that disappears within minutes. A read-only library is an honest limitation; the other is a visible lie. Setting the two Upstash variables switches the store to shared persistence and saving becomes safe to re-enable — `store.go` already has that adapter.
+That settled it. Accepting a save under those conditions means telling someone their trail was saved for the team when it disappears within minutes — worse than not offering it. Saving stayed disabled until storage was real.
 
-What still demonstrates the idea: ask a question someone already answered and it returns in about a millisecond, from a teammate's trail, with no model call at all.
+It now runs on Upstash, and the endpoint follows the store rather than a hardcoded flag: `POST /api/trails` refuses with a clear message when state is in-process, and works when it will hold. A trail saved through the API survived a full redeploy, which is a stronger test than surviving idle.
+
+Seeding is idempotent for a related reason. It originally seeded only when the store was empty, so the first save left it non-empty and the demo trails never appeared — permanently, since that condition never became true again. `HSETNX` per trail removes the ordering: each seed is written only if its own key is absent.
 
 ## Status
 
-Working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, voice input, spoken answers, step navigation, tray, self-exclusion from capture, recall, rate limiting.
+Working: global hotkey, per-display capture, multi-monitor overlay, real-desktop drawing, voice input, spoken answers, saving and recalling trails, step navigation, tray, self-exclusion from capture, rate limiting.
 
-Measured on the live deployment: recall 0ms, a cold vision call 7.9s end to end, and the returned pointer landing on the correct control.
+Measured on the live deployment: recall 0ms, a cold vision call 7.9s end to end, the returned pointer landing on the correct control, and a saved trail surviving a redeploy.
 
-Not built: saving trails on the hosted deployment (above), a trails browser inside the HUD — the tray menu opens the library instead — and true hold-to-talk, because Electron's `globalShortcut` only fires on key-down. Press-to-start with silence detection replaces it; real push-to-talk would need a native input hook.
+Not built: a trails browser inside the HUD — the tray menu opens the library instead. True hold-to-talk is also absent, because Electron's `globalShortcut` only fires on key-down; press-to-start with silence detection replaces it, and real push-to-talk would need a native input hook.
 
 ## Licence and third-party
 
