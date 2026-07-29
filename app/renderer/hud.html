@@ -598,7 +598,10 @@
 
           const live = (settled + " " + interim).trim();
           if (live) {
-            window.cairn.stage({ kind: "heard", text: live, hint: "", ...voiceScreen });
+            // Still "listening", not "heard you" — the sentence is being
+            // transcribed as it is spoken, and saying otherwise would imply
+            // Cairn is waiting on you when it is keeping up with you.
+            window.cairn.stage({ kind: "heard", text: live, hint: "Listening", ...voiceScreen });
           }
         };
 
