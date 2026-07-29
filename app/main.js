@@ -37,7 +37,7 @@ const path = require("node:path");
  * only downloaded an .exe. Override with CAIRN_SERVER to develop against a
  * local server.
  */
-const SERVER = process.env.CAIRN_SERVER || "https://cairn-mu-amber.vercel.app";
+const SERVER = process.env.CAIRN_SERVER || "https://cairn-si3g.vercel.app";
 
 /** Press this anywhere to summon Cairn. */
 const HOTKEY = "Control+Alt+C";
