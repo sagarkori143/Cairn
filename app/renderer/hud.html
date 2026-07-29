@@ -432,6 +432,7 @@
       async function ask({ fromVoice = false } = {}) {
         const question = q.value.trim();
         if (!question || busy) { if (fromVoice) stopVoiceFlow(); return; }
+        const myFlow = flowId;
         busy = true;
         lastQuestion = question;
         saveBtn.disabled = false;
@@ -447,6 +448,7 @@
         // Capture before the network call so the frame matches the question's
         // moment, not whatever is on screen when the answer lands.
         const shot = await window.cairn.capture();
+        if (myFlow !== flowId) { busy = false; askBtn.disabled = false; askBtn.textContent = "Ask"; return; }
         if (!shot.ok) {
           busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
           if (fromVoice) stopVoiceFlow();
@@ -456,6 +458,10 @@
 
         const res = await window.cairn.ask(question, shot.base64);
         busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
+
+        // Escape while this was in flight: it has already put everything away,
+        // so say nothing rather than reopening on top of whatever came next.
+        if (myFlow !== flowId) return;
 
         // The voice flow ends here either way — the panel comes back so the
         // walkthrough's controls (captions, save, step navigation) are reachable.
@@ -518,6 +524,16 @@
 
       let socket = null;
 
+      /*
+       * Identifies the current run so an abandoned one can't finish.
+       *
+       * Escape stops what is on screen, but a question already with the model
+       * keeps coming — and arriving seconds later to start a walkthrough
+       * nobody wants any more reads as the app ignoring the key. Escape moves
+       * this on; anything holding an older value stops where it is.
+       */
+      let flowId = 0;
+
       /**
        * Live dictation.
        *
@@ -535,25 +551,43 @@
       async function startRecording() {
         if (recording) return stopListening();
 
-        const token = await window.cairn.listenToken();
-        if (!token.ok) return showError(token.error);
-
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch {
-          return showError("No microphone available. Type your question instead.");
-        }
-
-        // Hand the screen over: panel out, overlay in.
+        /*
+         * The screen changes hands before anything is fetched.
+         *
+         * Asking the server for a token is a round trip, and it used to happen
+         * before a single pixel changed — so the click sat there doing nothing
+         * visible for as long as the network took, which on a cold server was
+         * over a second. The orb now appears immediately and admits it isn't
+         * ready yet, which is both true and something you can see.
+         */
         voiceScreen = await window.cairn.activeScreen();
         window.cairn.voiceMode(true);
-        window.cairn.stage({ kind: "listening", level: 0, hint: "Go ahead", ...voiceScreen });
+        window.cairn.stage({ kind: "listening", level: 0, hint: "Getting ready", ...voiceScreen });
+        err.style.display = "none";
+
+        // Neither of these needs the other, so they overlap instead of queueing.
+        const [tokenResult, micResult] = await Promise.allSettled([
+          window.cairn.listenToken(),
+          navigator.mediaDevices.getUserMedia({ audio: true }),
+        ]);
+
+        // Both failures land on the overlay, which now owns the screen — the
+        // panel is hidden and anything written there would go unseen.
+        if (micResult.status !== "fulfilled") {
+          return failVoice("No microphone available. Type your question instead.");
+        }
+        stream = micResult.value;
+
+        const token = tokenResult.status === "fulfilled" ? tokenResult.value : null;
+        if (!token?.ok) {
+          try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+          return failVoice(token?.error ?? "Couldn't start live transcription. Type your question instead.");
+        }
 
         recording = true;
         mic.classList.add("recording");
         micLabel.textContent = "Listening…";
         level.classList.add("on");
-        err.style.display = "none";
 
         // Browsers can't set an Authorization header on a socket, so the
         // credential rides in as a subprotocol. Which word precedes it depends
@@ -577,7 +611,17 @@
         var settled = "";     // finalised segments
         var interim = "";     // the current best guess, replaced as it firms up
 
+        // The meter redraws this several times a second, so it has to read the
+        // current answer rather than carry a copy of the one true at setup.
+        var listenHint = "Getting ready";
+
         socket.onopen = () => {
+          // Only now is anything you say actually going anywhere. Saying "Go
+          // ahead" while the socket was still connecting invited a first word
+          // that nothing was listening for.
+          listenHint = "Go ahead";
+          window.cairn.stage({ kind: "listening", level: 0, hint: listenHint, ...voiceScreen });
+
           recorder = new MediaRecorder(stream, { mimeType: pickMime() });
           // Small slices so audio reaches the service continuously rather than
           // in one lump at the end.
@@ -654,7 +698,7 @@
           // on screen it owns the stage, and re-sending a listening frame would
           // wipe the text mid-sentence.
           if (!settled && !interim) {
-            window.cairn.stage({ kind: "listening", level: rms, hint: "Go ahead", ...voiceScreen });
+            window.cairn.stage({ kind: "listening", level: rms, hint: listenHint, ...voiceScreen });
           }
 
           const finish = () => { clearInterval(tick); try { ctx.close(); } catch {} window.__finishListening?.(); };
@@ -747,11 +791,18 @@
         closeEverything();
       });
 
+      // The same key, arriving from the main process for the times this window
+      // is hidden or unfocused and never sees the keystroke itself.
+      window.cairn.onEscape(() => closeEverything());
+
       /** Stop everything: voice, walkthrough, overlay, panel. */
       function closeEverything() {
         takeManualControl();
         clearInterval(thinkingTimer);
         thinkingTimer = null;
+        // Abandons any question already with the model, so an answer that
+        // lands after this can't start a walkthrough.
+        flowId += 1;
         window.cairn.stage({ kind: "off" });
         window.cairn.voiceMode(false);
         if (recording) {
@@ -762,6 +813,10 @@
           micLabel.textContent = "Speak";
           level.classList.remove("on");
         }
+        // Always, not only while recording: the socket outlives the recorder
+        // when Escape lands between the last word and the answer.
+        try { socket?.close(); } catch {}
+        socket = null;
         clearAnswer();
         window.cairn.dismiss();
       }

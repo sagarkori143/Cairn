@@ -150,12 +150,42 @@ function showHud() {
   hud.showInactive(); // appear without stealing focus…
   hud.focus(); // …then take it deliberately, so typing lands here
   hud.webContents.send("cairn:summon");
+  syncEscapeCapture();
 }
 
 function hideAll() {
   hud?.hide();
   overlay?.hide();
   overlay?.webContents.send("cairn:clear");
+  syncEscapeCapture();
+}
+
+/**
+ * Escape has to reach Cairn when Cairn doesn't have focus.
+ *
+ * It was a keydown listener in the panel, which works only while the panel is
+ * focused — and the panel is hidden for the whole voice flow, while the
+ * overlay is deliberately unfocusable so it never steals clicks. So Escape did
+ * nothing at exactly the moment it was wanted most: something talking over you
+ * with no visible way to stop it.
+ *
+ * Taking a key globally is worth being careful about — Escape belongs to every
+ * other app too. It is held only while something of Cairn's is actually on
+ * screen and released the moment nothing is, so outside those few seconds
+ * nothing is intercepted.
+ */
+let escapeHeld = false;
+
+function syncEscapeCapture() {
+  const wanted = Boolean(voiceMode || overlay?.isVisible() || hud?.isVisible());
+  if (wanted === escapeHeld) return;
+
+  escapeHeld = wanted;
+  if (wanted) {
+    globalShortcut.register("Escape", () => hud?.webContents.send("cairn:escape"));
+  } else {
+    globalShortcut.unregister("Escape");
+  }
 }
 
 /* --------------------------------------------------------------- capture */
@@ -224,7 +254,13 @@ async function captureActiveScreen() {
     // answer lands blanks the display for the whole model call — the wait
     // looked like a crash. The frame is already captured by this point, so
     // showing it again cannot contaminate the shot.
-    if (overlayWasVisible && voiceMode) overlay.showInactive();
+    if (overlayWasVisible && voiceMode) {
+      overlay.showInactive();
+      // Showing a window again drops it out of the topmost band, so without
+      // this it returns behind whatever you were working in — present, drawing
+      // correctly, and invisible.
+      overlay.setAlwaysOnTop(true, "screen-saver");
+    }
 
     return {
       dataUrl: match.thumbnail.toDataURL(),
@@ -345,6 +381,7 @@ ipcMain.on("cairn:draw", (_e, payload) => {
   overlay.showInactive();
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.webContents.send("cairn:draw", { ...payload, virtual: b });
+  syncEscapeCapture();
 });
 
 /**
@@ -366,6 +403,7 @@ ipcMain.on("cairn:voice-mode", (_e, on) => {
     hud.showInactive();
     hud.focus();
   }
+  syncEscapeCapture();
 });
 
 /**
@@ -406,7 +444,13 @@ ipcMain.on("cairn:caption", (_e, payload) => {
 
 ipcMain.on("cairn:clear", () => {
   overlay?.webContents.send("cairn:clear");
-  overlay?.hide();
+  // Asking a question clears the last answer's drawing first. Under voice that
+  // happens while the overlay is the only thing on screen, so hiding the window
+  // here blanked the display for the entire model call — and left the capture
+  // that follows believing the overlay was never visible, so nothing restored
+  // it either. The voice flow hides it through its own "off" path.
+  if (!voiceMode) overlay?.hide();
+  syncEscapeCapture();
 });
 
 /**

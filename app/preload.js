@@ -54,6 +54,17 @@ contextBridge.exposeInMainWorld("cairn", {
   /** Overlay only: borrow clicks while the pointer is over a control. */
   setClickThrough: (ignore) => ipcRenderer.send("cairn:click-through", ignore),
 
+  /**
+   * Escape, pressed while Cairn was on screen but unfocused. The main process
+   * holds the key globally for those moments, because a hidden panel receives
+   * no keystrokes of its own.
+   */
+  onEscape: (fn) => {
+    const h = () => fn();
+    ipcRenderer.on("cairn:escape", h);
+    return () => ipcRenderer.off("cairn:escape", h);
+  },
+
   /** Overlay asks to run the walkthrough again; the HUD owns the sequence. */
   requestReplay: () => ipcRenderer.send("cairn:replay"),
   onReplay: (fn) => {

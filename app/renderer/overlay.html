@@ -350,13 +350,26 @@
       const stage = el("stage"), orb = el("orb"), orbCore = el("orbCore");
       const stageText = el("stageText"), stageHint = el("stageHint"), stageDots = el("stageDots");
 
+      /*
+       * Wipes the walkthrough. Asking a new question clears the last answer's
+       * drawing before the new one arrives.
+       *
+       * The voice stage is deliberately exempt. Asking from voice clears the
+       * previous walkthrough at the exact moment the stage has taken over the
+       * screen, and tearing it down here blanked the display — dim and all —
+       * until the next status word re-asserted it nearly two seconds later.
+       * The stage is torn down by its own "off" message, which every path out
+       * of the voice flow sends.
+       */
       function clear() {
-        for (const n of [dim, dot, label, cursor, stalk]) n.style.opacity = "0";
+        const stageOwnsScreen = stage.classList.contains("on");
+
+        for (const n of [dot, label, cursor, stalk]) n.style.opacity = "0";
+        if (!stageOwnsScreen) dim.style.opacity = "0";
         dot.style.transform = "translate(-50%,-50%) scale(0)";
         label.classList.remove("on");
         caption.classList.remove("on");
         replayWrap.classList.remove("on");
-        stage.classList.remove("on");
         ripples.forEach((r) => r.classList.remove("on"));
         window.cairn.setClickThrough(true);
       }
