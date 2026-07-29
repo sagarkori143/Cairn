@@ -26,8 +26,44 @@ const {
   nativeImage,
   shell,
   session,
+  dialog,
+  net,
 } = require("electron");
 const path = require("node:path");
+
+/**
+ * Says why a request failed, rather than that it did.
+ *
+ * Every call below used to catch the error and throw it away, so a wrong system
+ * clock, a blocked domain, a captive portal, a proxy and a genuine outage all
+ * produced the same sentence — and the person holding the app, the only one who
+ * could fix any of it, was told nothing. The server being fine is not much use
+ * to somebody whose machine cannot reach it.
+ */
+function describeNetworkError(err) {
+  const text = `${err?.message ?? err} ${err?.cause?.code ?? ""}`.toUpperCase();
+  const saw = (...needles) => needles.some((n) => text.includes(n));
+
+  if (saw("ERR_NAME_NOT_RESOLVED", "ENOTFOUND", "EAI_AGAIN"))
+    return "the address wouldn't resolve — DNS is failing, or this network blocks it";
+  if (saw("ERR_INTERNET_DISCONNECTED", "ENETUNREACH"))
+    return "this machine is offline";
+  if (saw("ERR_CERT", "CERT_", "UNABLE_TO_VERIFY", "ERR_SSL", "SELF_SIGNED"))
+    return "the secure connection was rejected — usually a wrong system clock, or antivirus inspecting HTTPS";
+  if (saw("ERR_PROXY", "ERR_TUNNEL_CONNECTION_FAILED"))
+    return "a proxy refused the connection";
+  if (saw("ABORT", "TIMED", "ETIMEDOUT"))
+    return "the server didn't answer in time";
+  if (saw("ECONNREFUSED", "ERR_CONNECTION_REFUSED"))
+    return "the connection was refused";
+  if (saw("ERR_BLOCKED", "ERR_ACCESS_DENIED"))
+    return "something on this machine blocked it — antivirus or a firewall";
+
+  return err?.message ? `it failed with: ${err.message}` : "it failed for an unknown reason";
+}
+
+/** Long enough for a vision answer, short enough not to hang forever. */
+const CALL_TIMEOUT = 45000;
 
 /**
  * Where the brain lives.
@@ -389,14 +425,15 @@ ipcMain.handle("cairn:transcribe", async (_e, { audio, mimeType }) => {
       method: "POST",
       headers: { "Content-Type": mimeType || "audio/webm" },
       body: Buffer.from(audio),
+      signal: AbortSignal.timeout(CALL_TIMEOUT),
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
     return { ok: true, text: data.text ?? "", confidence: data.confidence ?? 0 };
-  } catch {
+  } catch (err) {
     return {
       ok: false,
-      error: `Can't reach Cairn's server at ${SERVER}. Type your question instead.`,
+      error: `Couldn't reach Cairn's server — ${describeNetworkError(err)}. Type your question instead.`,
     };
   }
 });
@@ -422,14 +459,15 @@ ipcMain.handle("cairn:ask", async (_e, { question, frame }) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, frame, mediaType: "image/png" }),
+      signal: AbortSignal.timeout(CALL_TIMEOUT),
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
     return { ok: true, result: data };
-  } catch {
+  } catch (err) {
     return {
       ok: false,
-      error: `Can't reach Cairn's server at ${SERVER}. Is it running?`,
+      error: `Couldn't reach Cairn's server — ${describeNetworkError(err)}. Tray icon → Check connection for detail.`,
     };
   }
 });
@@ -448,12 +486,13 @@ ipcMain.handle("cairn:save-trail", async (_e, trail) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(trail),
+      signal: AbortSignal.timeout(CALL_TIMEOUT),
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
     return { ok: true, trail: data.trail };
-  } catch {
-    return { ok: false, error: `Can't reach Cairn's server at ${SERVER}.` };
+  } catch (err) {
+    return { ok: false, error: `Couldn't save — ${describeNetworkError(err)}.` };
   }
 });
 
@@ -514,12 +553,14 @@ ipcMain.on("cairn:voice-mode", (_e, on) => {
  */
 ipcMain.handle("cairn:listen-token", async () => {
   try {
-    const res = await fetch(`${SERVER}/api/listen-token`);
+    const res = await fetch(`${SERVER}/api/listen-token`, {
+      signal: AbortSignal.timeout(CALL_TIMEOUT),
+    });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
     return { ok: true, ...data };
-  } catch {
-    return { ok: false, error: `Can't reach Cairn's server at ${SERVER}.` };
+  } catch (err) {
+    return { ok: false, error: `Couldn't reach Cairn's server — ${describeNetworkError(err)}.` };
   }
 });
 
@@ -636,6 +677,52 @@ function setAutoStart(on) {
   refreshTray();
 }
 
+/**
+ * A connection test the person with the problem can run themselves.
+ *
+ * When Cairn is handed to someone else, "it can't reach the server" is a dead
+ * end: they can't see logs, and the server is usually fine — it is their clock,
+ * their proxy, or their network blocking the domain. This puts the actual
+ * result in a box they can read out, along with whether plain internet works,
+ * which separates "your network is down" from "your network dislikes this
+ * particular host".
+ */
+async function checkConnection() {
+  const started = Date.now();
+  let serverLine;
+
+  try {
+    const res = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(15000) });
+    const ms = Date.now() - started;
+    if (res.ok) {
+      const body = await res.json().catch(() => ({}));
+      serverLine =
+        `Reached the server in ${ms}ms.\n` +
+        `Vision: ${body.vision ? "on" : "off"}    Voice: ${body.voice ? "on" : "off"}    ` +
+        `Storage: ${body.store ?? "unknown"}`;
+    } else {
+      serverLine = `The server answered with ${res.status} after ${ms}ms.`;
+    }
+  } catch (err) {
+    serverLine = `Could not reach the server — ${describeNetworkError(err)}.`;
+  }
+
+  // Whether anything at all gets out, to tell a broken network apart from a
+  // blocked host.
+  const online = net.isOnline() ? "Windows reports this machine is online." : "Windows reports no network connection.";
+
+  dialog.showMessageBox({
+    type: serverLine.startsWith("Reached") ? "info" : "warning",
+    title: "Cairn — connection",
+    message: serverLine.startsWith("Reached") ? "Everything is working." : "Cairn cannot reach its server.",
+    detail: `${serverLine}\n\n${online}\n\nServer: ${SERVER}`,
+    buttons: ["Close", "Open the server in a browser"],
+    defaultId: 0,
+  }).then(({ response }) => {
+    if (response === 1) shell.openExternal(`${SERVER}/health`);
+  });
+}
+
 /** Rebuilt rather than mutated, because the labels carry live state. */
 function refreshTray() {
   if (!tray) return;
@@ -658,6 +745,7 @@ function refreshTray() {
         click: (item) => setAutoStart(item.checked),
       },
       { type: "separator" },
+      { label: "Check connection…", click: checkConnection },
       { label: "Open trails in browser", click: () => shell.openExternal(SERVER) },
       { label: `Server: ${SERVER}`, enabled: false },
       { type: "separator" },
