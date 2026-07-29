@@ -398,6 +398,19 @@ ipcMain.on("cairn:voice-mode", (_e, on) => {
     overlay?.setBounds(b);
     overlay?.showInactive();
     overlay?.setAlwaysOnTop(true, "screen-saver");
+
+    // Paint the listening state here rather than waiting for the renderer to
+    // ask which screen it is on and send its own first frame. Everything after
+    // this — a token, a socket, the microphone — takes long enough that the
+    // click needs to have visibly landed before any of it starts.
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    overlay?.webContents.send("cairn:stage", {
+      kind: "listening",
+      level: 0,
+      hint: "Getting ready",
+      bounds: display.bounds,
+      virtual: b,
+    });
   } else if (hud && !hud.isVisible()) {
     positionHud();
     hud.showInactive();

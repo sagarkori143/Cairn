@@ -487,20 +487,37 @@
       let voiceScreen = null;
       let thinkingTimer = null;
 
+      /*
+       * Enough of these to outlast the answer.
+       *
+       * Three of them covered under six seconds, so a normal wait ran out of
+       * words and looped — and "Looking at your screen…" arriving for the
+       * second time eight seconds in reads as the app having started over.
+       * These run in the order the work actually happens, and the last one is
+       * open-ended on purpose: it holds rather than wrapping, so a slow answer
+       * still says something true instead of restarting the story.
+       */
       const THINKING_WORDS = [
         "Looking at your screen…",
-        "Working it out…",
+        "Reading what's on it…",
+        "Finding the right control…",
+        "Working out the steps…",
+        "Checking the order…",
+        "Putting it together…",
         "Almost there…",
+        "Still working…",
       ];
 
       function startThinkingWords() {
         let i = 0;
         const show = () => window.cairn.stage({
-          kind: "thinking", text: THINKING_WORDS[i % THINKING_WORDS.length], ...voiceScreen,
+          kind: "thinking", text: THINKING_WORDS[i], ...voiceScreen,
         });
         show();
-        // Slow enough to read, quick enough that a 7s wait shows movement.
-        thinkingTimer = setInterval(() => { i += 1; show(); }, 1900);
+        // Slow enough to read, quick enough that the wait shows movement.
+        thinkingTimer = setInterval(() => {
+          if (i < THINKING_WORDS.length - 1) { i += 1; show(); }
+        }, 1900);
       }
 
       function stopVoiceFlow() {
@@ -560,10 +577,17 @@
          * over a second. The orb now appears immediately and admits it isn't
          * ready yet, which is both true and something you can see.
          */
-        voiceScreen = await window.cairn.activeScreen();
+        // This one is a plain send, not a request, so it takes effect in the
+        // same tick as the click — the main process already knows which
+        // display the pointer is on and paints the listening state itself.
+        // Waiting to be told the screen bounds first put a round trip between
+        // the click and any sign it had registered.
         window.cairn.voiceMode(true);
-        window.cairn.stage({ kind: "listening", level: 0, hint: "Getting ready", ...voiceScreen });
         err.style.display = "none";
+
+        // The authoritative bounds, used for every frame after the first.
+        voiceScreen = await window.cairn.activeScreen();
+        window.cairn.stage({ kind: "listening", level: 0, hint: "Getting ready", ...voiceScreen });
 
         // Neither of these needs the other, so they overlap instead of queueing.
         const [tokenResult, micResult] = await Promise.allSettled([

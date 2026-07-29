@@ -167,9 +167,21 @@
         display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 34px;
         opacity: 0; pointer-events: none;
-        transition: opacity 340ms ease;
+        /* Quick in, unhurried out. Arriving is a reply to a click and has to
+           feel like one; leaving is not answering anything. */
+        transition: opacity 140ms ease-out;
       }
       #stage.on { opacity: 1; }
+      #stage:not(.on) { transition: opacity 340ms ease; }
+
+      /* The orb lands rather than fades, so the click is visibly received
+         before any of the connecting has finished. */
+      #stage.on #orb { animation: orb-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+      @keyframes orb-in {
+        0%   { transform: scale(0.35); opacity: 0; }
+        55%  { opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
 
       /* Scales with your voice, so it is visibly hearing you. */
       #orb {
