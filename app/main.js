@@ -39,8 +39,14 @@ const path = require("node:path");
  */
 const SERVER = process.env.CAIRN_SERVER || "https://cairn-si3g.vercel.app";
 
-/** Press this anywhere to summon Cairn. */
-const HOTKEY = "Control+Alt+C";
+/**
+ * Press this anywhere to summon Cairn.
+ *
+ * Worth knowing: on Windows, Ctrl+Space is also the IME toggle for Chinese,
+ * Japanese and Korean input. Registration simply fails if something already
+ * owns the chord, which is logged at startup rather than failing silently.
+ */
+const HOTKEY = "Control+Space";
 
 let hud = null;
 let overlay = null;
@@ -111,11 +117,23 @@ function createHud() {
   hud.setContentProtection(true);
   hud.loadFile(path.join(__dirname, "renderer", "hud.html"));
 
-  // Dismiss on blur so the HUD never lingers over the app you moved on to.
+  // Dismiss on blur so the HUD never lingers over the app you moved on to —
+  // except during voice, where the panel is hidden deliberately and losing it
+  // to a blur would take the whole session with it.
   hud.on("blur", () => {
+    if (voiceMode) return;
     if (hud?.isVisible()) hideAll();
   });
 }
+
+/**
+ * True while the full-screen voice experience owns the display.
+ *
+ * The HUD steps out of the way for it, which means the usual "blur means they
+ * moved on, put it away" rule has to be suspended — otherwise hiding the panel
+ * would immediately tear down the thing it was hiding for.
+ */
+let voiceMode = false;
 
 /** Parks the HUD near the bottom of whichever screen the mouse is on. */
 function positionHud() {
@@ -321,9 +339,84 @@ ipcMain.on("cairn:draw", (_e, payload) => {
   overlay.webContents.send("cairn:draw", { ...payload, virtual: b });
 });
 
+/**
+ * Hands the screen to the voice experience, and takes it back afterwards.
+ *
+ * The overlay is shown up front so the listening state has somewhere to live
+ * before any answer exists.
+ */
+ipcMain.on("cairn:voice-mode", (_e, on) => {
+  voiceMode = Boolean(on);
+  if (voiceMode) {
+    hud?.hide();
+    const b = virtualBounds();
+    overlay?.setBounds(b);
+    overlay?.showInactive();
+    overlay?.setAlwaysOnTop(true, "screen-saver");
+  } else if (hud && !hud.isVisible()) {
+    positionHud();
+    hud.showInactive();
+    hud.focus();
+  }
+});
+
+/**
+ * Fetches a short-lived Deepgram key so the renderer can stream audio directly.
+ *
+ * Live transcription needs a WebSocket held open for the length of an
+ * utterance, which a serverless function cannot do — so the server can't relay
+ * the audio. Instead it mints a key scoped to transcription and expiring in
+ * under a minute. The long-lived key stays on the server; the worst a leaked
+ * temporary one buys is a few seconds of someone else's dictation.
+ */
+ipcMain.handle("cairn:listen-token", async () => {
+  try {
+    const res = await fetch(`${SERVER}/api/listen-token`);
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? `Server said ${res.status}` };
+    return { ok: true, ...data };
+  } catch {
+    return { ok: false, error: `Can't reach Cairn's server at ${SERVER}.` };
+  }
+});
+
+/** Which screen the voice experience should draw on. */
+ipcMain.handle("cairn:active-screen", () => {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  return { bounds: display.bounds, virtual: virtualBounds() };
+});
+
+/** Stage of the voice flow: listening → heard → thinking. */
+ipcMain.on("cairn:stage", (_e, payload) => {
+  overlay?.webContents.send("cairn:stage", payload);
+});
+
+/** Caption text, streamed word by word as the voice speaks it. */
+ipcMain.on("cairn:caption", (_e, payload) => {
+  overlay?.webContents.send("cairn:caption", payload);
+});
+
 ipcMain.on("cairn:clear", () => {
   overlay?.webContents.send("cairn:clear");
   overlay?.hide();
+});
+
+/**
+ * Lets the overlay become clickable for a moment.
+ *
+ * The overlay is click-through so it never swallows a click meant for the app
+ * underneath — but that also makes anything drawn on it unclickable, including
+ * the replay button. Electron keeps forwarding mouse *movement* while ignoring
+ * clicks, so the overlay can notice the pointer entering a control and ask for
+ * clicks back just for that moment, then hand them straight over again.
+ */
+ipcMain.on("cairn:click-through", (_e, ignore) => {
+  overlay?.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
+});
+
+/** Overlay → HUD. The replay button lives on the overlay; the sequence doesn't. */
+ipcMain.on("cairn:replay", () => {
+  hud?.webContents.send("cairn:replay");
 });
 
 ipcMain.on("cairn:dismiss", hideAll);

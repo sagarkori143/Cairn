@@ -6,17 +6,15 @@
     <style>
       :root {
         --void: #08090d;
-        --surface: #101219;
-        --raised: #171a24;
-        --line: #232733;
-        --ink: #e9ebf2;
-        --muted: #8b90a3;
-        --faint: #5b6072;
+        --ink: #eef0f6;
+        --muted: #9298ab;
+        --faint: #5f6579;
+        --line: rgba(238, 240, 246, 0.09);
         --ember: #ff8f4c;
         --moss: #35d6a0;
       }
-      html,
-      body {
+
+      html, body {
         margin: 0;
         height: 100%;
         background: transparent;
@@ -24,182 +22,158 @@
         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
         color: var(--ink);
         user-select: none;
+        -webkit-font-smoothing: antialiased;
       }
+
+      /*
+       * The glass panel.
+       *
+       * Three things make this read as glass rather than as a grey box: the
+       * saturate() (without it, blurred colour behind goes muddy), the hairline
+       * inner highlight along the top edge (how real frosted surfaces catch
+       * light), and a shadow deep enough to lift it off whatever is behind.
+       */
       #shell {
-        margin: 10px;
-        border-radius: 16px;
-        background: rgba(16, 18, 25, 0.86);
-        backdrop-filter: blur(22px) saturate(160%);
-        border: 1px solid rgba(233, 235, 242, 0.1);
-        box-shadow: 0 22px 60px -14px rgba(0, 0, 0, 0.75);
+        margin: 12px;
+        border-radius: 20px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015)),
+          rgba(14, 16, 22, 0.72);
+        backdrop-filter: blur(32px) saturate(180%);
+        -webkit-backdrop-filter: blur(32px) saturate(180%);
+        border: 1px solid var(--line);
+        box-shadow:
+          0 32px 70px -18px rgba(0, 0, 0, 0.8),
+          0 2px 8px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.11);
         overflow: hidden;
-        /* The whole shell is a drag handle except the interactive bits. */
         -webkit-app-region: drag;
+        animation: panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
       }
-      input,
-      button {
-        -webkit-app-region: no-drag;
-        font: inherit;
+      @keyframes panel-in {
+        from { opacity: 0; transform: translateY(14px) scale(0.975); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
       }
-      #bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px;
-      }
+
+      input, button { -webkit-app-region: no-drag; font: inherit; }
+
+      /* ------------------------------------------------------------ ask bar */
+      #bar { display: flex; align-items: center; gap: 9px; padding: 12px; }
+
       #q {
-        flex: 1;
-        min-width: 0;
-        background: transparent;
-        border: 0;
-        outline: none;
-        color: var(--ink);
-        font-size: 14px;
-        padding: 9px 6px;
+        flex: 1; min-width: 0;
+        background: transparent; border: 0; outline: none;
+        color: var(--ink); font-size: 15px; padding: 10px 4px;
+        letter-spacing: 0.1px;
       }
-      #q::placeholder {
-        color: var(--faint);
-      }
+      #q::placeholder { color: var(--faint); }
+
       .btn {
-        border: 0;
-        border-radius: 10px;
-        background: var(--raised);
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.055);
         color: var(--ink);
         font-size: 13px;
-        padding: 9px 13px;
+        padding: 10px 14px;
         cursor: pointer;
-        transition: background 140ms ease, opacity 140ms ease;
+        display: inline-flex; align-items: center; gap: 7px;
+        transition: background 160ms ease, transform 120ms ease, opacity 160ms ease, color 160ms ease;
       }
-      .btn:hover:not(:disabled) {
-        background: var(--line);
-      }
-      .btn:disabled {
-        opacity: 0.3;
-        cursor: default;
-      }
+      .btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+      .btn:active:not(:disabled) { transform: scale(0.97); }
+      .btn:disabled { opacity: 0.28; cursor: default; }
+
       .btn.primary {
         background: var(--ember);
         color: var(--void);
-        font-weight: 600;
+        font-weight: 650;
+        box-shadow: 0 6px 18px -6px var(--ember);
       }
+      .btn.primary:hover:not(:disabled) { background: #ffa163; }
+
+      #mic.recording {
+        background: var(--ember); color: var(--void); font-weight: 650;
+        box-shadow: 0 0 0 0 rgba(255, 143, 76, 0.5);
+        animation: breathe 1.9s ease-out infinite;
+      }
+      @keyframes breathe {
+        0%   { box-shadow: 0 0 0 0 rgba(255, 143, 76, 0.45); }
+        70%  { box-shadow: 0 0 0 13px rgba(255, 143, 76, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 143, 76, 0); }
+      }
+
       #hint {
-        padding: 0 16px 10px;
-        font-size: 11px;
+        padding: 0 18px 12px;
+        font-size: 11.5px;
         color: var(--faint);
+        letter-spacing: 0.15px;
       }
       kbd {
         border: 1px solid var(--line);
-        border-radius: 4px;
-        padding: 1px 4px;
-        font-family: inherit;
-        font-size: 10px;
+        background: rgba(255,255,255,0.045);
+        border-radius: 5px;
+        padding: 1.5px 5px;
+        font-family: inherit; font-size: 10.5px;
+        color: var(--muted);
       }
-      #answer {
-        display: none;
-        border-top: 1px solid var(--line);
-        padding: 14px 16px 16px;
-      }
-      #meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 11px;
-        font-weight: 600;
-        margin-bottom: 10px;
-      }
-      #chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 9px;
+
+      /* Level meter, only while recording. */
+      #level { height: 0; overflow: hidden; transition: height 260ms cubic-bezier(0.22,1,0.36,1); padding: 0 18px; }
+      #level.on { height: 16px; }
+      #levelFill {
+        height: 3px; width: 0%;
+        background: linear-gradient(90deg, var(--ember), #ffc39a);
         border-radius: 999px;
+        transition: width 80ms linear;
+        box-shadow: 0 0 10px rgba(255,143,76,0.55);
       }
-      #chip .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
+
+      /* ------------------------------------------------------------- answer */
+      #answer { display: none; border-top: 1px solid var(--line); padding: 16px 18px 18px; }
+      #answer.show { display: block; animation: rise 340ms cubic-bezier(0.22,1,0.36,1) both; }
+      @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+      #meta { display: flex; align-items: center; gap: 9px; font-size: 11.5px; font-weight: 600; margin-bottom: 12px; }
+      #chip {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 4px 11px; border-radius: 999px;
       }
-      #ms {
-        color: var(--faint);
-        font-family: "Cascadia Mono", Consolas, monospace;
-      }
-      #say {
-        display: flex;
-        gap: 11px;
-        font-size: 15.5px;
-        line-height: 1.6;
-      }
+      #chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+      #ms { color: var(--faint); font-family: "Cascadia Mono", Consolas, monospace; font-weight: 500; }
+
+      #say { display: flex; gap: 13px; font-size: 16px; line-height: 1.62; }
       #num {
-        flex: 0 0 auto;
-        width: 23px;
-        height: 23px;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--void);
+        flex: 0 0 auto; width: 25px; height: 25px; border-radius: 50%;
+        display: grid; place-items: center;
+        font-size: 11.5px; font-weight: 700; color: var(--void);
         margin-top: 2px;
       }
-      #nav {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      #pips {
-        display: flex;
-        gap: 5px;
-        margin-right: auto;
-      }
+      #text { animation: rise 300ms cubic-bezier(0.22,1,0.36,1) both; }
+
+      #nav { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+      #pips { display: flex; gap: 6px; margin-right: auto; }
       .pip {
-        height: 5px;
-        width: 5px;
-        border-radius: 999px;
-        background: var(--line);
-        transition: all 200ms ease;
+        height: 5px; width: 5px; border-radius: 999px;
+        background: rgba(255,255,255,0.16);
+        transition: all 260ms cubic-bezier(0.22,1,0.36,1);
       }
-      .pip.on {
-        width: 22px;
-      }
+      .pip.on { width: 24px; }
+
       #err {
         display: none;
-        padding: 11px 16px;
+        padding: 12px 18px;
         border-top: 1px solid var(--line);
         color: var(--ember);
         font-size: 13px;
+        animation: rise 280ms cubic-bezier(0.22,1,0.36,1) both;
       }
-      .spin {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--ember);
-        animation: ping 1s ease-out infinite;
-      }
-      #mic.recording {
-        background: var(--ember);
-        color: var(--void);
-        font-weight: 600;
-      }
-      #level {
-        height: 0;
-        overflow: hidden;
-        transition: height 200ms ease;
-        padding: 0 16px;
-      }
-      #level.on {
-        height: 14px;
-      }
-      #levelFill {
-        height: 3px;
-        width: 0%;
-        background: var(--ember);
-        border-radius: 999px;
-        transition: width 90ms linear;
-      }
-      @keyframes ping {
-        0% { transform: scale(1); opacity: 1; }
-        100% { transform: scale(2.6); opacity: 0; }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
     </style>
   </head>
@@ -207,7 +181,7 @@
     <div id="shell">
       <div id="bar">
         <button id="mic" class="btn" title="Speak your question">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align: -2px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px">
             <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" />
             <path d="M5 11a7 7 0 0 0 14 0M12 18v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
@@ -216,10 +190,10 @@
         <input id="q" placeholder="Ask about what's on your screen…" autocomplete="off" />
         <button id="ask" class="btn primary">Ask</button>
       </div>
+
       <div id="hint">
-        <kbd>Speak</kbd> then check the text · <kbd>Enter</kbd> to ask · <kbd>Esc</kbd> to dismiss · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> from anywhere
+        <kbd>Enter</kbd> ask · <kbd>Esc</kbd> close · <kbd>Ctrl</kbd><kbd>Space</kbd> from anywhere
       </div>
-      <!-- Level meter, visible only while recording, so you can see it's hearing you. -->
       <div id="level"><div id="levelFill"></div></div>
 
       <div id="err"></div>
@@ -232,6 +206,7 @@
         <div id="say"><div id="num">1</div><div id="text"></div></div>
         <div id="nav">
           <div id="pips"></div>
+          <button id="captions" class="btn" title="Show captions on screen">CC</button>
           <button id="save" class="btn">Save as trail</button>
           <button id="back" class="btn">Back</button>
           <button id="next" class="btn">Next</button>
@@ -241,10 +216,12 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const q = $("q"), askBtn = $("ask"), hint = $("hint"), err = $("err");
-      const answer = $("answer"), chip = $("chip"), chipText = $("chipText");
-      const ms = $("ms"), num = $("num"), text = $("text");
-      const pips = $("pips"), back = $("back"), next = $("next");
+      const q = $("q"), askBtn = $("ask"), err = $("err"), answer = $("answer");
+      const chip = $("chip"), chipText = $("chipText"), ms = $("ms");
+      const num = $("num"), text = $("text"), pips = $("pips");
+      const back = $("back"), next = $("next"), saveBtn = $("save");
+      const mic = $("mic"), micLabel = $("micLabel");
+      const level = $("level"), levelFill = $("levelFill");
 
       let result = null;
       let index = 0;
@@ -253,15 +230,23 @@
       // strongest key recall has for matching it later.
       let lastQuestion = "";
 
+      // Walkthrough playback. `token` invalidates an in-flight sequence: a
+      // pending speech callback from an abandoned run must not advance the new
+      // one, and comparing a captured token is simpler than unwinding timers.
+      let playing = false;
+      let token = 0;
+      let captionsOn = localStorage.getItem("cairn.captions") !== "0";
+
       /** Keeps the window exactly as tall as its contents. */
       function fit() {
         requestAnimationFrame(() =>
-          window.cairn.resizeHud(document.getElementById("shell").offsetHeight + 20),
+          window.cairn.resizeHud($("shell").offsetHeight + 24),
         );
       }
 
-      function reset() {
-        answer.style.display = "none";
+      function clearAnswer() {
+        takeManualControl();   // stop any sequence still speaking
+        answer.classList.remove("show");
         err.style.display = "none";
         result = null;
         index = 0;
@@ -272,8 +257,120 @@
       function showError(message) {
         err.textContent = message;
         err.style.display = "block";
-        answer.style.display = "none";
+        answer.classList.remove("show");
         fit();
+      }
+
+      /**
+       * Speaks a line and calls back when it finishes.
+       *
+       * The fallback timer matters more than it looks. SpeechSynthesis drops
+       * `onend` fairly often — a cancel mid-utterance, a voice still loading, a
+       * long line — and since the walkthrough advances on that callback, a
+       * missed one would strand the sequence forever on step two. So a timer
+       * sized to the text races it, and whichever fires first wins.
+       */
+      function speakThen(line, done, onWord) {
+        let finished = false;
+        let paced = null;
+        const once = () => {
+          if (finished) return;
+          finished = true;
+          clearInterval(paced);
+          onWord?.(line);          // make sure the caption ends up complete
+          done();
+        };
+
+        // ~55ms per character is roughly natural pace, plus a beat to read on.
+        const fallback = setTimeout(once, Math.min(line.length * 55 + 1400, 14000));
+
+        try {
+          speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(line);
+          u.rate = 1.03;
+
+          /*
+           * `onboundary` fires as the voice reaches each word and carries the
+           * character offset, which is what lets the caption build in step with
+           * what is actually being said rather than on a guessed timer.
+           *
+           * Support is patchy — some Windows voices never fire it — so a paced
+           * reveal starts alongside and is torn down the moment a real boundary
+           * arrives. Whichever works, the caption keeps up.
+           */
+          let usingBoundaries = false;
+          u.onboundary = (e) => {
+            if (!usingBoundaries) { usingBoundaries = true; clearInterval(paced); }
+            if (typeof e.charIndex === "number") onWord?.(line.slice(0, e.charIndex + (e.charLength ?? 0)));
+          };
+
+          if (onWord) {
+            const words = line.split(/(\s+)/);
+            let i = 0;
+            onWord("");
+            paced = setInterval(() => {
+              if (usingBoundaries || i >= words.length) return clearInterval(paced);
+              i += 1;
+              onWord(words.slice(0, i).join(""));
+            }, Math.max(90, Math.min(line.length * 55 / Math.max(words.length, 1), 320)));
+          }
+
+          u.onend = () => { clearTimeout(fallback); once(); };
+          u.onerror = () => { clearTimeout(fallback); once(); };
+          speechSynthesis.speak(u);
+        } catch {
+          clearTimeout(fallback);
+          once();
+        }
+      }
+
+      /**
+       * Walks the whole answer on its own: point, explain, move on.
+       *
+       * Making someone press Next between every step turns being shown
+       * something into operating a slideshow — and their attention is on their
+       * own screen, not on this panel. When it reaches the end it offers to run
+       * again rather than leaving the last step frozen on screen.
+       */
+      function play(from = 0) {
+        if (!result) return;
+        const mine = ++token;
+        playing = true;
+        index = from;
+        render();
+
+        const step = () => {
+          if (mine !== token || !result) return;              // superseded
+          const line = result.steps[index]?.say ?? "";
+          speakThen(
+            line,
+            () => {
+              if (mine !== token || !result) return;
+              if (index < result.steps.length - 1) {
+                index += 1;
+                render();
+                step();
+              } else {
+                playing = false;
+                // Nothing left to say — surface the replay affordance.
+                window.cairn.draw({ done: true });
+              }
+            },
+            // Stream the caption as the voice reaches each word.
+            (spoken) => {
+              if (mine !== token) return;
+              window.cairn.caption({ text: spoken, step: index, total: result.steps.length, show: captionsOn });
+            },
+          );
+        };
+        step();
+      }
+
+      /** Any manual navigation takes over; the sequence stops rather than fighting. */
+      function takeManualControl() {
+        token += 1;
+        playing = false;
+        try { speechSynthesis.cancel(); } catch {}
       }
 
       /** Renders one step and asks the overlay to point at it. */
@@ -282,8 +379,9 @@
         const step = result.steps[index];
         const memory = result.source === "trail";
         const colour = memory ? "var(--moss)" : "var(--ember)";
+        const rgba = memory ? "rgba(53,214,160,0.13)" : "rgba(255,143,76,0.13)";
 
-        chip.style.background = memory ? "rgba(53,214,160,0.14)" : "rgba(255,143,76,0.14)";
+        chip.style.background = rgba;
         chip.style.color = colour;
         chip.querySelector(".dot").style.background = colour;
         chipText.textContent = memory
@@ -293,6 +391,11 @@
 
         num.style.background = colour;
         num.textContent = String(index + 1);
+
+        // Re-trigger the reveal so each step arrives rather than swapping.
+        text.style.animation = "none";
+        void text.offsetWidth;
+        text.style.animation = "";
         text.textContent = step.say;
 
         pips.innerHTML = "";
@@ -307,30 +410,28 @@
         next.disabled = index >= result.steps.length - 1;
         // Only a fresh answer is worth saving; a recalled one is already saved.
         saveBtn.style.display = memory ? "none" : "";
-        answer.style.display = "block";
+
+        answer.classList.add("show");
         err.style.display = "none";
         fit();
 
-        // Speak it. SpeechSynthesis needs no Google key, so unlike
-        // SpeechRecognition it works fine inside Electron.
-        try {
-          speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(step.say);
-          u.rate = 1.03;
-          speechSynthesis.speak(u);
-        } catch {}
-
+        // Speech is driven by play(), not here — otherwise a manual Back would
+        // start a second voice over the sequence already running.
         window.cairn.draw({
           target: step.target,
           label: step.label,
           tone: memory ? "moss" : "ember",
           bounds: window.__lastBounds,
+          say: step.say,
+          step: index,
+          total: result.steps.length,
+          captions: captionsOn,
         });
       }
 
-      async function ask() {
+      async function ask({ fromVoice = false } = {}) {
         const question = q.value.trim();
-        if (!question || busy) return;
+        if (!question || busy) { if (fromVoice) stopVoiceFlow(); return; }
         busy = true;
         lastQuestion = question;
         saveBtn.disabled = false;
@@ -339,7 +440,7 @@
         askBtn.disabled = true;
         askBtn.textContent = "…";
         err.style.display = "none";
-        answer.style.display = "none";
+        answer.classList.remove("show");
         window.cairn.clear();
         fit();
 
@@ -347,115 +448,180 @@
         // moment, not whatever is on screen when the answer lands.
         const shot = await window.cairn.capture();
         if (!shot.ok) {
-          showError(shot.error);
-          busy = false;
-          askBtn.disabled = false;
-          askBtn.textContent = "Ask";
-          return;
+          busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
+          if (fromVoice) stopVoiceFlow();
+          return showError(shot.error);
         }
         window.__lastBounds = shot.bounds;
 
         const res = await window.cairn.ask(question, shot.base64);
-        busy = false;
-        askBtn.disabled = false;
-        askBtn.textContent = "Ask";
+        busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
 
-        if (!res.ok) {
-          showError(res.error);
-          return;
-        }
+        // The voice flow ends here either way — the panel comes back so the
+        // walkthrough's controls (captions, save, step navigation) are reachable.
+        if (fromVoice) stopVoiceFlow();
+        if (!res.ok) return showError(res.error);
+
         result = res.result;
-        index = 0;
-        render();
+        play(0);
       }
 
       /* ------------------------------------------------------------ voice */
 
-      /**
-       * Records, then transcribes locally.
+      let recorder = null, stream = null, recording = false;
+
+      /*
+       * The full-screen voice flow.
        *
-       * Press to start rather than hold: Electron's global hotkey only fires on
-       * key-down — there is no key-up — so true push-to-talk would need a
-       * native input hook. Auto-stopping on silence turns that constraint into
-       * something arguably nicer, since you don't have to keep a chord held
-       * while you think of the words.
+       * The panel gets out of the way entirely: you are talking about your
+       * screen, so the screen should be what you see. `screenBox` is captured
+       * once at the start so every stage lands on the display you were looking
+       * at, even if the mouse wanders mid-sentence.
        */
-      const mic = $("mic"), micLabel = $("micLabel");
-      const level = $("level"), levelFill = $("levelFill");
+      let voiceScreen = null;
+      let thinkingTimer = null;
 
-      let recorder = null;
-      let stream = null;
-      let recording = false;
+      const THINKING_WORDS = [
+        "Looking at your screen…",
+        "Working it out…",
+        "Almost there…",
+      ];
 
+      function startThinkingWords() {
+        let i = 0;
+        const show = () => window.cairn.stage({
+          kind: "thinking", text: THINKING_WORDS[i % THINKING_WORDS.length], ...voiceScreen,
+        });
+        show();
+        // Slow enough to read, quick enough that a 7s wait shows movement.
+        thinkingTimer = setInterval(() => { i += 1; show(); }, 1900);
+      }
+
+      function stopVoiceFlow() {
+        clearInterval(thinkingTimer);
+        thinkingTimer = null;
+        window.cairn.stage({ kind: "off" });
+        window.cairn.voiceMode(false);
+      }
+
+      /**
+       * Errors have to be shown on the overlay while voice owns the screen.
+       *
+       * showError writes into the panel, and the panel is hidden during voice —
+       * so a failure there produced a frozen screen and no explanation. Anything
+       * that can fail mid-flow routes through here instead.
+       */
+      function failVoice(message) {
+        window.cairn.stage({ kind: "thinking", text: message, hint: "", ...voiceScreen });
+        setTimeout(() => { stopVoiceFlow(); showError(message); }, 2200);
+      }
+
+      let socket = null;
+
+      /**
+       * Live dictation.
+       *
+       * Audio streams to the transcription service as you speak and words come
+       * back while you are still talking, rather than after. The earlier
+       * version recorded, uploaded, then typed the result out — which meant the
+       * whole sentence arrived at once, seconds late, and the typing animation
+       * was decoration pretending to be responsiveness.
+       *
+       * Interim results are replaced as they firm up; finalised segments are
+       * kept. That is why the text sometimes rewrites itself mid-sentence —
+       * the service is revising its guess, and showing that is more honest than
+       * hiding it behind a delay.
+       */
       async function startRecording() {
-        if (recording) return stopRecording();
+        if (recording) return stopListening();
+
+        const token = await window.cairn.listenToken();
+        if (!token.ok) return showError(token.error);
+
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch {
-          showError("No microphone available. Type your question instead.");
-          return;
+          return showError("No microphone available. Type your question instead.");
         }
+
+        // Hand the screen over: panel out, overlay in.
+        voiceScreen = await window.cairn.activeScreen();
+        window.cairn.voiceMode(true);
+        window.cairn.stage({ kind: "listening", level: 0, hint: "Go ahead", ...voiceScreen });
 
         recording = true;
         mic.classList.add("recording");
         micLabel.textContent = "Listening…";
         level.classList.add("on");
         err.style.display = "none";
-        fit();
 
-        const chunks = [];
-        recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        // Deepgram takes the key as a WebSocket subprotocol, since browsers
+        // can't set an Authorization header on a socket.
+        const params = new URLSearchParams({
+          model: token.model || "nova-3",
+          smart_format: "true",
+          punctuate: "true",
+          interim_results: "true",
+          endpointing: "600",
+        });
+        socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${params}`, ["token", token.key]);
 
-        recorder.onstop = async () => {
-          stream.getTracks().forEach((t) => t.stop());
-          mic.classList.remove("recording");
-          level.classList.remove("on");
-          levelFill.style.width = "0%";
-          micLabel.textContent = "Transcribing…";
-          fit();
+        // Declared with `var` so the level-meter loop below, which lives in the
+        // same function scope but runs after these are assigned, can read them.
+        var settled = "";     // finalised segments
+        var interim = "";     // the current best guess, replaced as it firms up
 
-          try {
-            const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-            // Anything this small is a misfire — a stray click, not a question.
-            if (blob.size < 2048) {
-              micLabel.textContent = "Speak";
-              recording = false;
-              return;
-            }
-            // Ship the container as-is; the server identifies the format.
-            const buf = await blob.arrayBuffer();
-            const res = await window.cairn.transcribe(buf, blob.type);
-            micLabel.textContent = "Speak";
-            recording = false;
-            if (!res.ok) return showError(res.error);
-            if (!res.text) return showError("Didn't catch that — try again, or type it.");
+        socket.onopen = () => {
+          recorder = new MediaRecorder(stream, { mimeType: pickMime() });
+          // Small slices so audio reaches the service continuously rather than
+          // in one lump at the end.
+          recorder.start(180);
+          recorder.ondataavailable = (e) => {
+            if (e.data.size && socket?.readyState === WebSocket.OPEN) socket.send(e.data);
+          };
+        };
 
-            /*
-             * Put the transcription in the box and stop there, rather than
-             * asking immediately.
-             *
-             * Local speech recognition gets words wrong, and asking straight
-             * away turns a misheard word into a confident answer to a question
-             * you never asked — plus a paid model call for it. One keypress to
-             * confirm is a cheap price for seeing what it heard. The text is
-             * selected so a bad guess can be typed straight over.
-             */
-            q.value = res.text;
-            q.focus();
-            q.select();
-          } catch {
-            micLabel.textContent = "Speak";
-            recording = false;
-            showError("Couldn't process that audio. Type your question instead.");
+        socket.onmessage = (event) => {
+          let msg;
+          try { msg = JSON.parse(event.data); } catch { return; }
+          const alt = msg?.channel?.alternatives?.[0];
+          if (!alt) return;
+
+          if (msg.is_final) { settled = (settled + " " + alt.transcript).trim(); interim = ""; }
+          else { interim = alt.transcript ?? ""; }
+
+          const live = (settled + " " + interim).trim();
+          if (live) {
+            window.cairn.stage({ kind: "heard", text: live, hint: "", ...voiceScreen });
           }
         };
 
-        recorder.start();
+        socket.onerror = () => { if (recording) failVoice("Lost the connection while listening."); };
+
+        /** Ends dictation and moves on to the question. */
+        window.__finishListening = () => {
+          const heard = (settled + " " + interim).trim();
+          try { recorder?.state === "recording" && recorder.stop(); } catch {}
+          try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
+          try { socket?.close(); } catch {}
+          socket = null;
+          recording = false;
+          mic.classList.remove("recording");
+          micLabel.textContent = "Speak";
+          level.classList.remove("on");
+
+          if (!heard) return failVoice("Didn't catch that — try again, or type it.");
+          q.value = heard;
+          startThinkingWords();
+          ask({ fromVoice: true });
+        };
 
         /*
-         * Silence detection. Waits for speech to actually begin before arming,
-         * so a slow start doesn't cut you off before you've said anything.
+         * The level meter also decides when you've finished.
+         *
+         * It waits for speech to actually begin before arming, so a slow start
+         * doesn't cut you off before you've said anything, and only then treats
+         * silence as the end of the sentence.
          */
         const ctx = new AudioContext();
         const analyser = ctx.createAnalyser();
@@ -463,66 +629,87 @@
         ctx.createMediaStreamSource(stream).connect(analyser);
         const buf = new Float32Array(analyser.fftSize);
 
-        let spoke = false;
-        let quietSince = null;
+        let spoke = false, quietSince = null;
         const started = Date.now();
 
         const tick = setInterval(() => {
-          if (!recording) return clearInterval(tick);
+          if (!recording) { clearInterval(tick); try { ctx.close(); } catch {} return; }
 
           analyser.getFloatTimeDomainData(buf);
           let sum = 0;
           for (const v of buf) sum += v * v;
           const rms = Math.sqrt(sum / buf.length);
-
           levelFill.style.width = `${Math.min(100, Math.round(rms * 900))}%`;
 
-          if (rms > 0.015) {
-            spoke = true;
-            quietSince = null;
-          } else if (spoke) {
-            quietSince ??= Date.now();
-            if (Date.now() - quietSince > 1200) {
-              clearInterval(tick);
-              ctx.close();
-              if (recorder?.state === "recording") recorder.stop();
-            }
+          // Only drive the orb before any words exist; once the transcript is
+          // on screen it owns the stage, and re-sending a listening frame would
+          // wipe the text mid-sentence.
+          if (!settled && !interim) {
+            window.cairn.stage({ kind: "listening", level: rms, hint: "Go ahead", ...voiceScreen });
           }
 
-          // Hard stop, so a noisy room can't record forever.
-          if (Date.now() - started > 15000) {
-            clearInterval(tick);
-            ctx.close();
-            if (recorder?.state === "recording") recorder.stop();
+          const finish = () => { clearInterval(tick); try { ctx.close(); } catch {} window.__finishListening?.(); };
+
+          if (rms > 0.015) { spoke = true; quietSince = null; }
+          else if (spoke) {
+            quietSince ??= Date.now();
+            if (Date.now() - quietSince > 1100) return finish();
           }
+          // Hard stop, so a noisy room can't listen forever.
+          if (Date.now() - started > 20000) return finish();
         }, 100);
       }
 
-      function stopRecording() {
-        if (recorder?.state === "recording") recorder.stop();
+      /** Manual stop, for clicking the mic again mid-sentence. */
+      function stopListening() {
+        window.__finishListening?.();
       }
 
-      mic.addEventListener("click", startRecording);
+      /** MediaRecorder support varies; take the first container it admits to. */
+      function pickMime() {
+        for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]) {
+          if (MediaRecorder.isTypeSupported?.(m)) return m;
+        }
+        return "";
+      }
 
-      /*
-       * Saving is only offered on a fresh answer. A recalled trail is already
-       * in the library, so the button would either duplicate it or do nothing —
-       * both worse than not being there.
-       */
-      const saveBtn = $("save");
+      /* ---------------------------------------------------------- wiring */
+
+      mic.addEventListener("click", startRecording);
+      askBtn.addEventListener("click", ask);
+
+      back.addEventListener("click", () => {
+        if (index > 0) { takeManualControl(); index--; render(); }
+      });
+      next.addEventListener("click", () => {
+        if (result && index < result.steps.length - 1) { takeManualControl(); index++; render(); }
+      });
+
+      /* Captions are a preference, so the choice survives restarts. */
+      const capBtn = $("captions");
+      function paintCaptionToggle() {
+        capBtn.style.background = captionsOn ? "rgba(255,255,255,0.16)" : "";
+        capBtn.style.color = captionsOn ? "var(--ink)" : "var(--faint)";
+        capBtn.title = captionsOn ? "Captions on — click to hide" : "Captions off — click to show";
+      }
+      capBtn.addEventListener("click", () => {
+        captionsOn = !captionsOn;
+        localStorage.setItem("cairn.captions", captionsOn ? "1" : "0");
+        paintCaptionToggle();
+        if (result) render();   // apply now rather than at the next step
+      });
+      paintCaptionToggle();
+
+      // The replay button lives on the overlay, but the sequence lives here.
+      window.cairn.onReplay(() => { if (result) play(0); });
 
       saveBtn.addEventListener("click", async () => {
         if (!result || result.source !== "model") return;
         saveBtn.disabled = true;
         saveBtn.textContent = "Saving…";
-
         const res = await window.cairn.saveTrail({
-          title: result.title,
-          question: lastQuestion,
-          app: result.app,
-          steps: result.steps,
+          title: result.title, question: lastQuestion, app: result.app, steps: result.steps,
         });
-
         if (res.ok) {
           saveBtn.textContent = "Saved ✓";
           saveBtn.style.color = "var(--moss)";
@@ -533,24 +720,47 @@
         }
       });
 
-      askBtn.addEventListener("click", ask);
-      back.addEventListener("click", () => { if (index > 0) { index--; render(); } });
-      next.addEventListener("click", () => {
-        if (result && index < result.steps.length - 1) { index++; render(); }
-      });
-
       q.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); ask(); }
       });
 
+      /*
+       * Escape means stop, everything, now.
+       *
+       * It is the key people reach for when something is talking over them and
+       * they want it gone. Unwinding one level at a time makes them press it
+       * three times to get that, which reads as the app arguing — so one press
+       * kills the voice, drops the overlay, and puts Cairn away.
+       */
       window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") window.cairn.dismiss();
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        closeEverything();
       });
+
+      /** Stop everything: voice, walkthrough, overlay, panel. */
+      function closeEverything() {
+        takeManualControl();
+        clearInterval(thinkingTimer);
+        thinkingTimer = null;
+        window.cairn.stage({ kind: "off" });
+        window.cairn.voiceMode(false);
+        if (recording) {
+          recording = false;
+          try { if (recorder?.state === "recording") recorder.stop(); } catch {}
+          try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
+          mic.classList.remove("recording");
+          micLabel.textContent = "Speak";
+          level.classList.remove("on");
+        }
+        clearAnswer();
+        window.cairn.dismiss();
+      }
 
       window.cairn.onSummon(() => {
         q.value = "";
+        clearAnswer();
         q.focus();
-        reset();
       });
 
       fit();

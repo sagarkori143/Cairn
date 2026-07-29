@@ -4,179 +4,523 @@
     <meta charset="utf-8" />
     <title>Cairn overlay</title>
     <style>
-      html,
-      body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: transparent;
-        /* The window is click-through at the OS level, but belt and braces:
-           nothing in here should ever be a pointer target. */
-        pointer-events: none;
-        user-select: none;
+      /*
+       * What gets drawn on the real desktop.
+       *
+       * All the weight sits on the target's centre point. The model returns a
+       * box, and that box is sometimes a few pixels loose — an outline makes
+       * exactly that error the most conspicuous thing on screen, so there isn't
+       * one. Concentric rings and a cursor landing on the centre read as "look
+       * here" and stay convincing even when the box is imprecise.
+       */
+      html, body {
+        margin: 0; width: 100%; height: 100%;
+        overflow: hidden; background: transparent;
+        pointer-events: none; user-select: none;
         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-      #ring {
-        position: absolute;
-        border-radius: 8px;
+
+      #dim {
+        position: absolute; inset: 0; opacity: 0;
+        transition: opacity 420ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .ripple {
+        position: absolute; border-radius: 50%;
+        transform: translate(-50%, -50%) scale(0.3);
         opacity: 0;
+      }
+      @keyframes ripple-out {
+        0%   { transform: translate(-50%,-50%) scale(0.25); opacity: 0.55; }
+        70%  { opacity: 0.12; }
+        100% { transform: translate(-50%,-50%) scale(1.9);  opacity: 0; }
+      }
+      .ripple.on { animation: ripple-out 2.6s cubic-bezier(0.16,1,0.3,1) infinite; }
+      .r2 { animation-delay: 0.55s; }
+      .r3 { animation-delay: 1.1s; }
+
+      #dot {
+        position: absolute; width: 10px; height: 10px; border-radius: 50%;
+        transform: translate(-50%,-50%) scale(0); opacity: 0;
         transition:
-          left 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          top 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          width 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          height 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 240ms ease;
+          left 620ms cubic-bezier(0.34,1.3,0.5,1),
+          top 620ms cubic-bezier(0.34,1.3,0.5,1),
+          opacity 260ms ease,
+          transform 480ms cubic-bezier(0.34,1.6,0.5,1);
       }
-      #halo {
-        position: absolute;
-        inset: -6px;
-        border-radius: 12px;
-        animation: pulse 2.2s ease-in-out infinite;
-      }
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 0.45;
-          transform: scale(1);
-        }
-        50% {
-          opacity: 0.06;
-          transform: scale(1.09);
-        }
-      }
+
       #cursor {
-        position: absolute;
-        opacity: 0;
+        position: absolute; opacity: 0; transform-origin: 4px 3px;
         transition:
-          left 620ms cubic-bezier(0.22, 1, 0.36, 1),
-          top 620ms cubic-bezier(0.22, 1, 0.36, 1),
+          left 680ms cubic-bezier(0.33,1.2,0.4,1),
+          top 680ms cubic-bezier(0.33,1.2,0.4,1),
           opacity 240ms ease;
-        filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55));
+        filter: drop-shadow(0 4px 10px rgba(0,0,0,0.55));
       }
+      @keyframes cursor-land {
+        0%   { transform: scale(1.45) rotate(-8deg); }
+        55%  { transform: scale(0.88) rotate(2deg); }
+        100% { transform: scale(1) rotate(0deg); }
+      }
+      #cursor.landing { animation: cursor-land 520ms cubic-bezier(0.22,1,0.36,1); }
+
       #label {
-        position: absolute;
-        transform: translateX(-50%);
-        padding: 5px 11px;
-        border-radius: 999px;
-        font-size: 12.5px;
-        font-weight: 600;
-        letter-spacing: 0.2px;
-        color: #08090d;
-        white-space: nowrap;
-        opacity: 0;
+        position: absolute; transform: translateX(-50%) translateY(6px);
+        padding: 7px 13px; border-radius: 999px;
+        font-size: 13px; font-weight: 600; white-space: nowrap;
+        opacity: 0; color: #08090d;
         transition:
-          left 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          top 480ms cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 240ms ease;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+          left 560ms cubic-bezier(0.34,1.3,0.5,1),
+          top 560ms cubic-bezier(0.34,1.3,0.5,1),
+          opacity 320ms ease 160ms,
+          transform 320ms cubic-bezier(0.22,1,0.36,1) 160ms;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.18);
+      }
+      #label.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      #stalk {
+        position: absolute; width: 2px; opacity: 0; border-radius: 2px;
+        transition: opacity 300ms ease 160ms,
+          left 560ms cubic-bezier(0.34,1.3,0.5,1),
+          top 560ms cubic-bezier(0.34,1.3,0.5,1),
+          height 560ms cubic-bezier(0.34,1.3,0.5,1);
+      }
+
+      /* Shared glass, so the desktop chrome matches the HUD exactly. */
+      .glass {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+          rgba(14,16,22,0.74);
+        backdrop-filter: blur(32px) saturate(180%);
+        -webkit-backdrop-filter: blur(32px) saturate(180%);
+        border: 1px solid rgba(238,240,246,0.1);
+        box-shadow:
+          0 30px 70px -18px rgba(0,0,0,0.8),
+          inset 0 1px 0 rgba(255,255,255,0.11);
+      }
+
+      /*
+       * Caption: what is being said, as it is being said.
+       *
+       * Deliberately plain — no step number, no progress dots, no chrome. It is
+       * a subtitle, and subtitles work by being readable at a glance and then
+       * ignored. All the counters live in the HUD, where someone can look for
+       * them; putting them here would compete with the screen the caption is
+       * describing.
+       *
+       * Sits near the top because the HUD owns the bottom.
+       */
+      #caption {
+        position: absolute; top: 7%;
+        transform: translateX(-50%) translateY(-14px);
+        max-width: min(900px, 66vw);
+        padding: 20px 30px; border-radius: 22px;
+        color: #f4f6fb;
+        font-size: 25px; line-height: 1.45; font-weight: 500;
+        letter-spacing: 0.1px; text-align: center;
+        opacity: 0; pointer-events: none;
+        text-shadow: 0 2px 14px rgba(0,0,0,0.45);
+        transition: opacity 300ms ease, transform 380ms cubic-bezier(0.22,1,0.36,1);
+      }
+      #caption.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      /* The word currently being spoken, so the eye can follow the voice. */
+      #capText .said { opacity: 0.62; }
+      #capCursor {
+        display: inline-block; width: 2px; height: 0.95em;
+        vertical-align: -0.12em; margin-left: 3px; border-radius: 2px;
+        animation: blink 1.1s steps(2, start) infinite;
+      }
+      @keyframes blink { 0%,100% { opacity: 0.9; } 50% { opacity: 0.15; } }
+
+      /* Replay, once the walkthrough has finished. */
+      #replayWrap {
+        position: absolute; left: 50%; top: 50%;
+        transform: translate(-50%,-50%) scale(0.94);
+        opacity: 0; pointer-events: none;
+        transition: opacity 320ms ease, transform 380ms cubic-bezier(0.22,1,0.36,1);
+      }
+      #replayWrap.on { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+      #replay {
+        display: flex; align-items: center; gap: 11px;
+        padding: 15px 24px; border-radius: 999px;
+        color: #eef0f6; font-size: 15px; font-weight: 600;
+        cursor: pointer; border: 1px solid rgba(238,240,246,0.12);
+        /* Enabled only while the pointer is actually over it — see the script. */
+        pointer-events: auto;
+        transition: transform 160ms ease, background 200ms ease;
+      }
+      #replay:hover { transform: scale(1.035); }
+      #replay:active { transform: scale(0.98); }
+
+      /* ------------------------------------------------- voice experience */
+
+      /*
+       * While you speak, the screen itself is the interface — no panel, no
+       * chrome. Three stages share this space in sequence: an orb that moves
+       * with your voice, the sentence typing itself out, then what Cairn is
+       * doing while it works.
+       */
+      #stage {
+        position: absolute;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 34px;
+        opacity: 0; pointer-events: none;
+        transition: opacity 340ms ease;
+      }
+      #stage.on { opacity: 1; }
+
+      /* Scales with your voice, so it is visibly hearing you. */
+      #orb {
+        position: relative; width: 132px; height: 132px;
+        display: grid; place-items: center;
+      }
+      #orbCore {
+        width: 76px; height: 76px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #ffb185, #ff8f4c 62%, #e0692a);
+        box-shadow: 0 0 60px rgba(255,143,76,0.55), 0 0 0 1px rgba(255,255,255,0.14) inset;
+        transform: scale(1);
+        transition: transform 90ms cubic-bezier(0.22,1,0.36,1);
+      }
+      .orbRing {
+        position: absolute; inset: 0; border-radius: 50%;
+        border: 1.5px solid rgba(255,143,76,0.5);
+        animation: orb-out 2.4s cubic-bezier(0.16,1,0.3,1) infinite;
+      }
+      .orbRing.o2 { animation-delay: 0.8s; }
+      .orbRing.o3 { animation-delay: 1.6s; }
+      @keyframes orb-out {
+        0%   { transform: scale(0.62); opacity: 0.6; }
+        100% { transform: scale(1.55); opacity: 0; }
+      }
+
+      #stageText {
+        max-width: min(900px, 66vw);
+        text-align: center;
+        font-size: 30px; line-height: 1.4; font-weight: 500;
+        color: #f4f6fb; letter-spacing: 0.2px;
+        text-shadow: 0 3px 20px rgba(0,0,0,0.6);
+        min-height: 1.4em;
+      }
+      #stageHint {
+        font-size: 14px; color: rgba(244,246,251,0.5);
+        letter-spacing: 0.4px; text-transform: uppercase;
+      }
+
+      /* Status words crossfade rather than cut, so the wait reads as one
+         continuous thought instead of a flicking counter. */
+      #stageText.swap { animation: word-swap 460ms cubic-bezier(0.22,1,0.36,1); }
+      @keyframes word-swap {
+        0%   { opacity: 0; transform: translateY(8px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
     </style>
   </head>
   <body>
-    <!-- Spotlight: one full-desktop dim with a hole cut where the target is.
-         An SVG mask gives a genuinely rounded cut-out and animates as one
-         element when the target moves between steps. -->
-    <svg id="dim" width="100%" height="100%" style="position: absolute; inset: 0; opacity: 0; transition: opacity 260ms ease">
+    <!-- Feathered spotlight. A radial falloff rather than a hard shape: a
+         slightly-wrong box degrades into a soft glow around roughly the right
+         place, instead of a crisp outline around the wrong one. -->
+    <svg id="dim" width="100%" height="100%" preserveAspectRatio="none">
       <defs>
+        <radialGradient id="feather">
+          <stop offset="0%" stop-color="black" />
+          <stop offset="55%" stop-color="black" />
+          <stop offset="100%" stop-color="white" />
+        </radialGradient>
         <mask id="hole">
-          <rect id="maskAll" width="100%" height="100%" fill="white" />
-          <rect id="maskHole" x="0" y="0" width="0" height="0" rx="8" fill="black" />
+          <!-- Sized to the active display, not the whole canvas. -->
+          <rect id="maskFill" x="0" y="0" width="0" height="0" fill="white" />
+          <ellipse id="holeShape" cx="0" cy="0" rx="0" ry="0" fill="url(#feather)" />
         </mask>
       </defs>
-      <rect width="100%" height="100%" fill="rgba(6,7,11,0.55)" mask="url(#hole)" />
+      <!--
+        The dimming rect covers only the screen the question was asked about.
+        This window spans every monitor so the pointer can be drawn anywhere,
+        but dimming all of them would darken screens the answer has nothing to
+        do with — someone reading documentation on a second monitor should not
+        have it greyed out because they asked about the first.
+      -->
+      <rect id="dimRect" x="0" y="0" width="0" height="0" fill="rgba(5,6,10,0.58)" mask="url(#hole)" />
     </svg>
 
-    <div id="ring"><div id="halo"></div></div>
+    <div class="ripple r1" id="rip1"></div>
+    <div class="ripple r2" id="rip2"></div>
+    <div class="ripple r3" id="rip3"></div>
+    <div id="dot"></div>
+    <div id="stalk"></div>
     <div id="label"></div>
-    <svg id="cursor" width="30" height="30" viewBox="0 0 24 24" fill="none">
-      <path
-        id="cursorPath"
-        d="M5 3l14 8.2-6.1 1.6-2.6 6.1L5 3z"
-        stroke="#08090d"
-        stroke-width="1.4"
-        stroke-linejoin="round"
-      />
+
+    <svg id="cursor" width="34" height="34" viewBox="0 0 24 24" fill="none">
+      <path id="cursorPath" d="M5 2.5l13.4 7.9-5.9 1.6-2.5 5.9L5 2.5z"
+        stroke="rgba(8,9,13,0.85)" stroke-width="1.5" stroke-linejoin="round" />
     </svg>
+
+    <div id="stage">
+      <div id="orb">
+        <div class="orbRing o1"></div>
+        <div class="orbRing o2"></div>
+        <div class="orbRing o3"></div>
+        <div id="orbCore"></div>
+      </div>
+      <div id="stageText"></div>
+      <div id="stageHint"></div>
+    </div>
+
+    <div id="caption" class="glass"><span id="capText"></span><span id="capCursor"></span></div>
+
+    <div id="replayWrap">
+      <div id="replay" class="glass">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Show me again
+      </div>
+    </div>
 
     <script>
-      const dim = document.getElementById("dim");
-      const maskHole = document.getElementById("maskHole");
-      const ring = document.getElementById("ring");
-      const halo = document.getElementById("halo");
-      const label = document.getElementById("label");
-      const cursor = document.getElementById("cursor");
-      const cursorPath = document.getElementById("cursorPath");
+      const el = (id) => document.getElementById(id);
+      const dim = el("dim"), holeShape = el("holeShape");
+      const dimRect = el("dimRect"), maskFill = el("maskFill");
+      const ripples = [el("rip1"), el("rip2"), el("rip3")];
+      const dot = el("dot"), stalk = el("stalk"), label = el("label");
+      const cursor = el("cursor"), cursorPath = el("cursorPath");
+      const caption = el("caption"), capText = el("capText"), capCursor = el("capCursor");
+      const replayWrap = el("replayWrap"), replay = el("replay");
+
+      // Where the active display sits inside this window, so the caption and
+      // replay button centre on that screen rather than across the whole desk.
+      let screenBox = null;
+
+      const stage = el("stage"), orb = el("orb"), orbCore = el("orbCore");
+      const stageText = el("stageText"), stageHint = el("stageHint");
 
       function clear() {
-        for (const el of [dim, ring, label, cursor]) el.style.opacity = "0";
+        for (const n of [dim, dot, label, cursor, stalk]) n.style.opacity = "0";
+        dot.style.transform = "translate(-50%,-50%) scale(0)";
+        label.classList.remove("on");
+        caption.classList.remove("on");
+        replayWrap.classList.remove("on");
+        stage.classList.remove("on");
+        ripples.forEach((r) => r.classList.remove("on"));
+        window.cairn.setClickThrough(true);
       }
 
-      window.cairn.onClear(clear);
+      /** Fills the stage area to the active display, so it centres on one screen. */
+      function placeStage(box) {
+        if (!box) return;
+        Object.assign(stage.style, {
+          left: `${box.x}px`, top: `${box.y}px`,
+          width: `${box.w}px`, height: `${box.h}px`,
+        });
+      }
 
-      window.cairn.onDraw(({ target, label: text, tone, bounds, virtual }) => {
-        if (!target) {
-          clear();
+      /*
+       * The voice flow's three moments.
+       *
+       *   listening — an orb that scales with your voice, so it is visibly
+       *               hearing you rather than merely claiming to
+       *   heard     — the sentence typing itself out, which doubles as a chance
+       *               to notice a mistranscription before the answer arrives
+       *   thinking  — what Cairn is actually doing, because a wait you can
+       *               narrate feels shorter than a spinner
+       */
+      window.cairn.onStage(({ kind, bounds, virtual, level, text, hint }) => {
+        if (kind === "off") {
+          stage.classList.remove("on");
           return;
         }
 
+        if (bounds && virtual) {
+          const sx = bounds.x - virtual.x, sy = bounds.y - virtual.y;
+          screenBox = { x: sx, y: sy, w: bounds.width, h: bounds.height,
+                        cx: sx + bounds.width / 2, cy: sy + bounds.height / 2 };
+          placeStage(screenBox);
+
+          // Dim just this screen while the voice flow owns it.
+          for (const node of [dimRect, maskFill]) {
+            node.setAttribute("x", sx); node.setAttribute("y", sy);
+            node.setAttribute("width", bounds.width); node.setAttribute("height", bounds.height);
+          }
+          // No spotlight hole yet — nothing is being pointed at.
+          holeShape.setAttribute("rx", 0);
+          holeShape.setAttribute("ry", 0);
+          dim.style.opacity = "1";
+        }
+
+        stage.classList.add("on");
+        orb.style.display = kind === "listening" ? "" : "none";
+
+        if (kind === "listening") {
+          // Compress the level so quiet speech still moves it visibly.
+          const scale = 1 + Math.min(Math.sqrt(level ?? 0) * 1.6, 0.55);
+          orbCore.style.transform = `scale(${scale})`;
+          stageText.textContent = "";
+          stageHint.textContent = hint ?? "Listening";
+          return;
+        }
+
+        stageHint.textContent = hint ?? "";
+        if (text !== undefined) {
+          if (kind === "thinking") {
+            stageText.classList.remove("swap");
+            void stageText.offsetWidth;
+            stageText.classList.add("swap");
+          }
+          stageText.textContent = text;
+        }
+      });
+
+      window.cairn.onClear(clear);
+
+      /* Caption text arrives word by word while the voice speaks. */
+      window.cairn.onCaption(({ text, show }) => {
+        if (!show) return caption.classList.remove("on");
+        capText.textContent = text ?? "";
+        capCursor.style.background = caption.dataset.colour || "#ff8f4c";
+        if (screenBox) {
+          caption.style.left = `${screenBox.cx}px`;
+          caption.style.maxWidth = `${Math.min(screenBox.w * 0.66, 900)}px`;
+        }
+        caption.classList.add("on");
+      });
+
+      window.cairn.onDraw((payload) => {
+        const { target, label: text, tone, bounds, virtual, say, step, total, captions, done } = payload;
+
+        // Finished: park the walkthrough and offer to run it again.
+        if (done) {
+          caption.classList.remove("on");
+          replayWrap.classList.add("on");
+          return;
+        }
+        replayWrap.classList.remove("on");
+
         const colour = tone === "moss" ? "#35d6a0" : "#ff8f4c";
+        caption.dataset.colour = colour;
+
+        if (!captions) caption.classList.remove("on");
+
+        if (!target) {
+          for (const n of [dim, dot, label, cursor, stalk]) n.style.opacity = "0";
+          ripples.forEach((r) => r.classList.remove("on"));
+          return;
+        }
 
         /*
          * Coordinate mapping, and the one place this can go subtly wrong.
          *
-         * The model returns coordinates normalised 0..1 against the screenshot
-         * of a single display. This window spans the *virtual* desktop — every
-         * monitor unioned — whose origin can be negative when a second screen
-         * sits to the left of the primary. So: normalise into that display's
-         * absolute desktop position, then subtract the virtual origin to get a
-         * CSS offset inside this window.
+         * Coordinates arrive normalised against a screenshot of one display.
+         * This window spans the whole virtual desktop, whose origin is negative
+         * when a monitor sits left of the primary. So: scale into that display's
+         * absolute position, then subtract the virtual origin.
          */
         const absX = bounds.x + target.x * bounds.width;
         const absY = bounds.y + target.y * bounds.height;
-        const w = target.w * bounds.width;
-        const h = target.h * bounds.height;
+        const w = Math.max(target.w * bounds.width, 10);
+        const h = Math.max(target.h * bounds.height, 10);
         const x = absX - virtual.x;
         const y = absY - virtual.y;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
 
-        maskHole.setAttribute("x", x);
-        maskHole.setAttribute("y", y);
-        maskHole.setAttribute("width", Math.max(w, 4));
-        maskHole.setAttribute("height", Math.max(h, 4));
+        /*
+         * Dim only the display the question was asked about.
+         *
+         * This window spans every monitor so the pointer can be drawn wherever
+         * the target is, but the shading is confined to one screen — otherwise
+         * asking about the left monitor greys out the right one too, which is
+         * both alarming and useless.
+         */
+        const sx = bounds.x - virtual.x;
+        const sy = bounds.y - virtual.y;
+        for (const node of [dimRect, maskFill]) {
+          node.setAttribute("x", sx);
+          node.setAttribute("y", sy);
+          node.setAttribute("width", bounds.width);
+          node.setAttribute("height", bounds.height);
+        }
+        screenBox = { x: sx, y: sy, w: bounds.width, h: bounds.height, cx: sx + bounds.width / 2, cy: sy + bounds.height / 2 };
+
+        // Centre the on-screen furniture on that display too.
+        caption.style.left = `${screenBox.cx}px`;
+        caption.style.maxWidth = `${Math.min(bounds.width * 0.66, 900)}px`;
+        replayWrap.style.left = `${screenBox.cx}px`;
+        replayWrap.style.top = `${screenBox.cy}px`;
+
+        holeShape.setAttribute("cx", cx);
+        holeShape.setAttribute("cy", cy);
+        holeShape.setAttribute("rx", Math.max(w * 0.95, 62));
+        holeShape.setAttribute("ry", Math.max(h * 1.3, 46));
         dim.style.opacity = "1";
 
-        Object.assign(ring.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-          width: `${w}px`,
-          height: `${h}px`,
-          border: `2px solid ${colour}`,
-          boxShadow: `0 0 0 1px rgba(0,0,0,0.45), 0 0 26px ${colour}66`,
-          opacity: "1",
+        const size = Math.max(w, h, 48);
+        ripples.forEach((r) => {
+          Object.assign(r.style, {
+            left: `${cx}px`, top: `${cy}px`,
+            width: `${size}px`, height: `${size}px`,
+            border: `2px solid ${colour}`,
+          });
+          r.classList.remove("on");
+          void r.offsetWidth;   // restart so every step re-pulses from zero
+          r.classList.add("on");
         });
-        halo.style.border = `1.5px solid ${colour}`;
+
+        Object.assign(dot.style, {
+          left: `${cx}px`, top: `${cy}px`, background: colour,
+          boxShadow: `0 0 16px ${colour}, 0 0 0 4px ${colour}30`,
+          opacity: "1", transform: "translate(-50%,-50%) scale(1)",
+        });
 
         cursorPath.setAttribute("fill", colour);
-        Object.assign(cursor.style, {
-          left: `${x + w / 2 - 4}px`,
-          top: `${y + h / 2 - 2}px`,
-          opacity: "1",
-        });
+        Object.assign(cursor.style, { left: `${cx - 2}px`, top: `${cy + 2}px`, opacity: "1" });
+        cursor.classList.remove("landing");
+        void cursor.offsetWidth;
+        cursor.classList.add("landing");
 
         if (text) {
           label.textContent = text;
           label.style.background = colour;
-          // Flip below the target when it sits near the top of the desktop,
-          // so the chip never runs off-screen.
-          const above = y > 46;
-          Object.assign(label.style, {
-            left: `${x + w / 2}px`,
-            top: above ? `${y - 34}px` : `${y + h + 12}px`,
-            opacity: "1",
+          const above = y > 76;
+          const labelY = above ? y - 46 : y + h + 20;
+          Object.assign(label.style, { left: `${cx}px`, top: `${labelY}px` });
+          label.classList.add("on");
+
+          const stalkTop = above ? labelY + 30 : y + h + 2;
+          const stalkH = above ? y - stalkTop - 2 : labelY - stalkTop - 2;
+          Object.assign(stalk.style, {
+            left: `${cx}px`, top: `${stalkTop}px`,
+            height: `${Math.max(stalkH, 0)}px`,
+            background: `linear-gradient(${above ? "180deg" : "0deg"}, ${colour}, ${colour}00)`,
+            opacity: "0.75",
           });
         } else {
-          label.style.opacity = "0";
+          label.classList.remove("on");
+          stalk.style.opacity = "0";
         }
+      });
+
+      /*
+       * The window ignores clicks so it never intercepts one meant for the app
+       * underneath — but mouse *movement* is still forwarded, which is enough to
+       * notice the pointer entering the replay button and briefly ask for clicks
+       * back. Anywhere else on the overlay stays transparent to input.
+       */
+      replay.addEventListener("mouseenter", () => window.cairn.setClickThrough(false));
+      replay.addEventListener("mouseleave", () => window.cairn.setClickThrough(true));
+      replay.addEventListener("click", () => {
+        window.cairn.setClickThrough(true);
+        replayWrap.classList.remove("on");
+        window.cairn.requestReplay();
       });
     </script>
   </body>

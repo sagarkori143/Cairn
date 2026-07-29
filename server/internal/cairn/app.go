@@ -477,6 +477,7 @@ func Mux() http.Handler {
 	mux.HandleFunc("/health", HandleHealth)
 	mux.HandleFunc("/api/ask", HandleAsk)
 	mux.HandleFunc("/api/transcribe", HandleTranscribe)
+	mux.HandleFunc("/api/listen-token", HandleListenToken)
 	mux.HandleFunc("/api/trails", HandleTrails)
 	return WithCORS(mux)
 }

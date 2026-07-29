@@ -28,6 +28,40 @@ contextBridge.exposeInMainWorld("cairn", {
   /** Save the current answer as a trail the team inherits. */
   saveTrail: (trail) => ipcRenderer.invoke("cairn:save-trail", trail),
 
+  /** A short-lived key for streaming straight to the transcription service. */
+  listenToken: () => ipcRenderer.invoke("cairn:listen-token"),
+
+  /** Hand the screen to the full-screen voice experience, or take it back. */
+  voiceMode: (on) => ipcRenderer.send("cairn:voice-mode", on),
+  activeScreen: () => ipcRenderer.invoke("cairn:active-screen"),
+
+  /** Drive the voice flow's visual stages: listening → heard → thinking. */
+  stage: (payload) => ipcRenderer.send("cairn:stage", payload),
+  onStage: (fn) => {
+    const h = (_e, payload) => fn(payload);
+    ipcRenderer.on("cairn:stage", h);
+    return () => ipcRenderer.off("cairn:stage", h);
+  },
+
+  /** Stream caption text as the voice reaches each word. */
+  caption: (payload) => ipcRenderer.send("cairn:caption", payload),
+  onCaption: (fn) => {
+    const h = (_e, payload) => fn(payload);
+    ipcRenderer.on("cairn:caption", h);
+    return () => ipcRenderer.off("cairn:caption", h);
+  },
+
+  /** Overlay only: borrow clicks while the pointer is over a control. */
+  setClickThrough: (ignore) => ipcRenderer.send("cairn:click-through", ignore),
+
+  /** Overlay asks to run the walkthrough again; the HUD owns the sequence. */
+  requestReplay: () => ipcRenderer.send("cairn:replay"),
+  onReplay: (fn) => {
+    const h = () => fn();
+    ipcRenderer.on("cairn:replay", h);
+    return () => ipcRenderer.off("cairn:replay", h);
+  },
+
   /** Draw a step on the real desktop. */
   draw: (payload) => ipcRenderer.send("cairn:draw", payload),
   clear: () => ipcRenderer.send("cairn:clear"),
