@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/ask.go": { "maxDuration": 60 },
+    "api/transcribe.go": { "maxDuration": 60 },
+    "api/trails.go": { "maxDuration": 10 },
+    "api/health.go": { "maxDuration": 10 }
+  },
+  "rewrites": [{ "source": "/health", "destination": "/api/health" }]
+}
