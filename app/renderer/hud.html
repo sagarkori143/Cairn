@@ -35,17 +35,23 @@
        */
       #shell {
         margin: 12px;
-        border-radius: 20px;
+        border-radius: 26px;
+        /* Thinner tint over a heavier blur: the glass now carries more of the
+           colour behind it and less of its own grey, which is what separates
+           frosted glass from a dark panel with a blur behind it. */
         background:
-          linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015)),
-          rgba(14, 16, 22, 0.72);
-        backdrop-filter: blur(32px) saturate(180%);
-        -webkit-backdrop-filter: blur(32px) saturate(180%);
-        border: 1px solid var(--line);
+          linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.02)),
+          rgba(14, 16, 22, 0.55);
+        backdrop-filter: blur(48px) saturate(200%);
+        -webkit-backdrop-filter: blur(48px) saturate(200%);
+        border: 1px solid rgba(255, 255, 255, 0.11);
         box-shadow:
-          0 32px 70px -18px rgba(0, 0, 0, 0.8),
-          0 2px 8px rgba(0, 0, 0, 0.4),
-          inset 0 1px 0 rgba(255, 255, 255, 0.11);
+          0 40px 90px -20px rgba(0, 0, 0, 0.82),
+          0 2px 10px rgba(0, 0, 0, 0.4),
+          /* Light along the top edge, shadow along the bottom — a pane has
+             thickness, and only lighting both edges shows it. */
+          inset 0 1px 0 rgba(255, 255, 255, 0.16),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.28);
         overflow: hidden;
         -webkit-app-region: drag;
         animation: panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -58,23 +64,23 @@
       input, button { -webkit-app-region: no-drag; font: inherit; }
 
       /* ------------------------------------------------------------ ask bar */
-      #bar { display: flex; align-items: center; gap: 9px; padding: 12px; }
+      #bar { display: flex; align-items: center; gap: 11px; padding: 16px; }
 
       #q {
         flex: 1; min-width: 0;
         background: transparent; border: 0; outline: none;
-        color: var(--ink); font-size: 15px; padding: 10px 4px;
+        color: var(--ink); font-size: 17px; padding: 12px 6px;
         letter-spacing: 0.1px;
       }
       #q::placeholder { color: var(--faint); }
 
       .btn {
-        border: 1px solid transparent;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.055);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.07);
         color: var(--ink);
-        font-size: 13px;
-        padding: 10px 14px;
+        font-size: 14px;
+        padding: 12px 17px;
         cursor: pointer;
         display: inline-flex; align-items: center; gap: 7px;
         transition: background 160ms ease, transform 120ms ease, opacity 160ms ease, color 160ms ease;
@@ -103,8 +109,8 @@
       }
 
       #hint {
-        padding: 0 18px 12px;
-        font-size: 11.5px;
+        padding: 0 22px 15px;
+        font-size: 12.5px;
         color: var(--faint);
         letter-spacing: 0.15px;
       }
@@ -129,11 +135,11 @@
       }
 
       /* ------------------------------------------------------------- answer */
-      #answer { display: none; border-top: 1px solid var(--line); padding: 16px 18px 18px; }
+      #answer { display: none; border-top: 1px solid var(--line); padding: 13px 18px 14px; }
       #answer.show { display: block; animation: rise 340ms cubic-bezier(0.22,1,0.36,1) both; }
       @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-      #meta { display: flex; align-items: center; gap: 9px; font-size: 11.5px; font-weight: 600; margin-bottom: 12px; }
+      #meta { display: flex; align-items: center; gap: 9px; font-size: 11.5px; font-weight: 600; margin-bottom: 9px; }
       #chip {
         display: inline-flex; align-items: center; gap: 7px;
         padding: 4px 11px; border-radius: 999px;
@@ -141,16 +147,29 @@
       #chip .dot { width: 6px; height: 6px; border-radius: 50%; }
       #ms { color: var(--faint); font-family: "Cascadia Mono", Consolas, monospace; font-weight: 500; }
 
-      #say { display: flex; gap: 13px; font-size: 16px; line-height: 1.62; }
+      #say { display: flex; gap: 12px; font-size: 15px; line-height: 1.55; }
       #num {
-        flex: 0 0 auto; width: 25px; height: 25px; border-radius: 50%;
+        flex: 0 0 auto; width: 23px; height: 23px; border-radius: 50%;
         display: grid; place-items: center;
-        font-size: 11.5px; font-weight: 700; color: var(--void);
+        font-size: 11px; font-weight: 700; color: var(--void);
         margin-top: 2px;
       }
       #text { animation: rise 300ms cubic-bezier(0.22,1,0.36,1) both; }
 
-      #nav { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+      #nav { display: flex; align-items: center; gap: 7px; margin-top: 12px; }
+
+      /*
+       * The step controls are deliberately smaller than the ask bar's.
+       *
+       * There are five of them once a walkthrough is running, and at the ask
+       * bar's size they turned the panel into a toolbar — which is the wrong
+       * emphasis for something that should sit under the step you are reading.
+       */
+      #nav .btn {
+        padding: 7px 12px;
+        font-size: 12.5px;
+        border-radius: 11px;
+      }
       #pips { display: flex; gap: 6px; margin-right: auto; }
       .pip {
         height: 5px; width: 5px; border-radius: 999px;
@@ -208,6 +227,7 @@
           <div id="pips"></div>
           <button id="captions" class="btn" title="Show captions on screen">CC</button>
           <button id="save" class="btn">Save as trail</button>
+          <button id="replay" class="btn" title="Run the walkthrough again">Show me again</button>
           <button id="back" class="btn">Back</button>
           <button id="next" class="btn">Next</button>
         </div>
@@ -219,7 +239,7 @@
       const q = $("q"), askBtn = $("ask"), err = $("err"), answer = $("answer");
       const chip = $("chip"), chipText = $("chipText"), ms = $("ms");
       const num = $("num"), text = $("text"), pips = $("pips");
-      const back = $("back"), next = $("next"), saveBtn = $("save");
+      const back = $("back"), next = $("next"), saveBtn = $("save"), replayBtn = $("replay");
       const mic = $("mic"), micLabel = $("micLabel");
       const level = $("level"), levelFill = $("levelFill");
 
@@ -442,6 +462,22 @@
         askBtn.textContent = "…";
         err.style.display = "none";
         answer.classList.remove("show");
+
+        /*
+         * A typed question waits the same way a spoken one does.
+         *
+         * Only the voice flow handed the screen over, so pressing Enter left
+         * the panel sitting there with a greyed-out button and nothing else to
+         * say the question had been taken — the same silence that made the
+         * voice wait feel broken. This has to happen before the clear below,
+         * which hides the overlay unless the stage has claimed it.
+         */
+        if (!fromVoice) {
+          voiceScreen = await window.cairn.activeScreen();
+          window.cairn.voiceMode(true);
+          startThinkingWords();
+        }
+
         window.cairn.clear();
         fit();
 
@@ -457,7 +493,7 @@
         if (myFlow !== flowId) { busy = false; askBtn.disabled = false; askBtn.textContent = "Ask"; return; }
         if (!shot.ok) {
           busy = false; askBtn.disabled = false; askBtn.textContent = "Ask";
-          if (fromVoice) stopVoiceFlow();
+          stopVoiceFlow();
           return showError(shot.error);
         }
         window.__lastBounds = shot.bounds;
@@ -469,9 +505,10 @@
         // so say nothing rather than reopening on top of whatever came next.
         if (myFlow !== flowId) return;
 
-        // The voice flow ends here either way — the panel comes back so the
-        // walkthrough's controls (captions, save, step navigation) are reachable.
-        if (fromVoice) stopVoiceFlow();
+        // The waiting screen ends here either way, spoken or typed — the panel
+        // comes back so the walkthrough's controls (captions, save, step
+        // navigation) are reachable.
+        stopVoiceFlow();
         if (!res.ok) return showError(res.error);
 
         result = res.result;
@@ -828,8 +865,17 @@
       });
       paintCaptionToggle();
 
-      // The replay button lives on the overlay, but the sequence lives here.
-      window.cairn.onReplay(() => { if (result) play(0); });
+      /*
+       * Replay lives in the panel now, not floating on the desktop.
+       *
+       * On the overlay it sat in the middle of the screen over the user's own
+       * work, and it needed the overlay to borrow clicks back to be pressable
+       * at all. In here it is an ordinary button next to the other step
+       * controls, and it is available throughout rather than only once the
+       * narration has finished — wanting a step repeated is most likely while
+       * it is still running.
+       */
+      replayBtn.addEventListener("click", () => { if (result) play(0); });
 
       saveBtn.addEventListener("click", async () => {
         if (!result || result.source !== "model") return;

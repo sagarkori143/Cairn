@@ -65,14 +65,6 @@ contextBridge.exposeInMainWorld("cairn", {
     return () => ipcRenderer.off("cairn:escape", h);
   },
 
-  /** Overlay asks to run the walkthrough again; the HUD owns the sequence. */
-  requestReplay: () => ipcRenderer.send("cairn:replay"),
-  onReplay: (fn) => {
-    const h = () => fn();
-    ipcRenderer.on("cairn:replay", h);
-    return () => ipcRenderer.off("cairn:replay", h);
-  },
-
   /** Draw a step on the real desktop. */
   draw: (payload) => ipcRenderer.send("cairn:draw", payload),
   clear: () => ipcRenderer.send("cairn:clear"),

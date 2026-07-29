@@ -100,8 +100,10 @@ function createOverlay() {
 
 function createHud() {
   hud = new BrowserWindow({
-    width: 640,
-    height: 260,
+    width: 760,
+    // Close to the ask bar's real height; fit() corrects it once the renderer
+    // has measured itself, and starting near the answer avoids a visible jump.
+    height: 200,
     frame: false,
     transparent: true,
     resizable: false,
@@ -127,11 +129,17 @@ function createHud() {
 }
 
 /**
- * True while the full-screen voice experience owns the display.
+ * True while the full-screen stage owns the display.
  *
- * The HUD steps out of the way for it, which means the usual "blur means they
- * moved on, put it away" rule has to be suspended — otherwise hiding the panel
- * would immediately tear down the thing it was hiding for.
+ * Named for voice because that is where it started, but a typed question
+ * raises it too: both hand the screen over while the answer is being worked
+ * out, and everything that follows from that is the same either way — the
+ * panel steps aside, the screenshot is taken without hiding the overlay, and
+ * clearing the last walkthrough must not pull the stage down with it.
+ *
+ * While it is up, the usual "blur means they moved on, put it away" rule has
+ * to be suspended — otherwise hiding the panel would immediately tear down the
+ * thing it was hiding for.
  */
 let voiceMode = false;
 
@@ -485,11 +493,6 @@ ipcMain.on("cairn:clear", () => {
  */
 ipcMain.on("cairn:click-through", (_e, ignore) => {
   overlay?.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
-});
-
-/** Overlay → HUD. The replay button lives on the overlay; the sequence doesn't. */
-ipcMain.on("cairn:replay", () => {
-  hud?.webContents.send("cairn:replay");
 });
 
 ipcMain.on("cairn:dismiss", hideAll);
