@@ -216,6 +216,51 @@
         100% { opacity: 1; transform: translateY(0); }
       }
 
+      /*
+       * Each word arrives on its own, rising out of a blur.
+       *
+       * Replacing the whole line on every socket message made the sentence
+       * flick — every word repainted whether or not it had changed, so settled
+       * text juddered each time a new one landed. Words are separate elements
+       * now and only the new ones animate; the blur is what keeps an arrival
+       * from reading as a hard edge snapping into place.
+       */
+      #stageText .word {
+        display: inline-block;
+        margin-right: 0.28em;
+        animation: word-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes word-in {
+        0%   { opacity: 0; transform: translateY(0.4em) scale(0.96); filter: blur(6px); }
+        60%  { opacity: 1; }
+        100% { opacity: 1; transform: none; filter: blur(0); }
+      }
+
+      /*
+       * Proof that the wait is doing something.
+       *
+       * The status words change every 1.9s, which leaves long stretches where
+       * nothing on screen moves and a slow answer is indistinguishable from a
+       * dead one. The dots move continuously underneath them.
+       */
+      #stageDots {
+        display: none;
+        gap: 7px;
+        align-items: center;
+      }
+      #stageDots.on { display: flex; }
+      #stageDots i {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: rgba(244, 246, 251, 0.75);
+        animation: dot-pulse 1250ms ease-in-out infinite;
+      }
+      #stageDots i:nth-child(2) { animation-delay: 160ms; }
+      #stageDots i:nth-child(3) { animation-delay: 320ms; }
+      @keyframes dot-pulse {
+        0%, 100% { opacity: 0.25; transform: translateY(0) scale(0.85); }
+        50%      { opacity: 1;    transform: translateY(-4px) scale(1); }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
           animation-duration: 0.01ms !important;
@@ -272,6 +317,7 @@
         <div id="orbCore"></div>
       </div>
       <div id="stageText"></div>
+      <div id="stageDots"><i></i><i></i><i></i></div>
       <div id="stageHint"></div>
     </div>
 
@@ -302,7 +348,7 @@
       let screenBox = null;
 
       const stage = el("stage"), orb = el("orb"), orbCore = el("orbCore");
-      const stageText = el("stageText"), stageHint = el("stageHint");
+      const stageText = el("stageText"), stageHint = el("stageHint"), stageDots = el("stageDots");
 
       function clear() {
         for (const n of [dim, dot, label, cursor, stalk]) n.style.opacity = "0";
@@ -322,6 +368,39 @@
           left: `${box.x}px`, top: `${box.y}px`,
           width: `${box.w}px`, height: `${box.h}px`,
         });
+      }
+
+      /*
+       * The transcript, word by word.
+       *
+       * Interim results are guesses, so the tail of the sentence can change
+       * between messages — this keeps the words both versions agree on and
+       * only rebuilds from the first one that differs. Words that survive a
+       * revision are never touched, so they don't re-animate underneath the
+       * ones still arriving.
+       */
+      let liveWords = [];
+
+      function renderLiveWords(text) {
+        const words = String(text ?? "").split(/\s+/).filter(Boolean);
+
+        let same = 0;
+        while (same < words.length && same < liveWords.length && words[same] === liveWords[same]) same++;
+
+        while (stageText.childNodes.length > same) stageText.removeChild(stageText.lastChild);
+        for (let i = same; i < words.length; i++) {
+          const span = document.createElement("span");
+          span.className = "word";
+          span.textContent = words[i];
+          stageText.appendChild(span);
+        }
+        liveWords = words;
+      }
+
+      /** For text that isn't a transcript — status words, errors. */
+      function setPlainText(text) {
+        liveWords = [];
+        stageText.textContent = text;
       }
 
       /*
@@ -359,12 +438,13 @@
 
         stage.classList.add("on");
         orb.style.display = kind === "listening" ? "" : "none";
+        stageDots.classList.toggle("on", kind === "thinking");
 
         if (kind === "listening") {
           // Compress the level so quiet speech still moves it visibly.
           const scale = 1 + Math.min(Math.sqrt(level ?? 0) * 1.6, 0.55);
           orbCore.style.transform = `scale(${scale})`;
-          stageText.textContent = "";
+          setPlainText("");
           stageHint.textContent = hint ?? "Listening";
           return;
         }
@@ -375,8 +455,10 @@
             stageText.classList.remove("swap");
             void stageText.offsetWidth;
             stageText.classList.add("swap");
+            setPlainText(text);
+          } else {
+            renderLiveWords(text);
           }
-          stageText.textContent = text;
         }
       });
 

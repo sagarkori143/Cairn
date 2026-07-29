@@ -219,6 +219,13 @@ async function captureActiveScreen() {
       }
     }
 
+    // Voice is the exception to leaving it hidden: the overlay is the only
+    // thing on screen during a voice question, so staying hidden until the
+    // answer lands blanks the display for the whole model call — the wait
+    // looked like a crash. The frame is already captured by this point, so
+    // showing it again cannot contaminate the shot.
+    if (overlayWasVisible && voiceMode) overlay.showInactive();
+
     return {
       dataUrl: match.thumbnail.toDataURL(),
       base64: match.thumbnail.toPNG().toString("base64"),
@@ -226,8 +233,9 @@ async function captureActiveScreen() {
       bounds: display.bounds,
     };
   } catch (err) {
-    // Only restore on failure — on success the overlay is about to be shown
-    // again with the new answer, and flashing the previous one first is noise.
+    // Outside voice, restore only on failure — on success the overlay is about
+    // to be shown again with the answer, and flashing the previous one first
+    // is noise.
     if (overlayWasVisible) overlay.showInactive();
     throw err;
   }
