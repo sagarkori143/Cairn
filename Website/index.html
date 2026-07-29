@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cairn — answers on your screen, not in a chat window</title>
+    <meta
+      name="description"
+      content="Press Ctrl+Space anywhere in Windows. Cairn reads the screen you're stuck on and points at the control you need, on your actual desktop."
+    />
+    <meta property="og:title" content="Cairn" />
+    <meta
+      property="og:description"
+      content="Answers drawn on your real desktop, not described in a chat window."
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='12' cy='19' rx='8' ry='2.6' fill='%235b6072'/%3E%3Cellipse cx='12' cy='15.5' rx='6.4' ry='2.4' fill='%238b90a3'/%3E%3Cellipse cx='12' cy='11.6' rx='4.8' ry='2.1' fill='%23c9cdd8'/%3E%3Cellipse cx='12' cy='8.2' rx='3.2' ry='1.8' fill='%23ff8f4c'/%3E%3C/svg%3E"
+    />
+  </head>
+
+  <body>
+    <header id="nav">
+      <a class="brand" href="#top">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+          <ellipse cx="12" cy="19" rx="8" ry="2.6" fill="#5b6072" />
+          <ellipse cx="12" cy="15.5" rx="6.4" ry="2.4" fill="#8b90a3" />
+          <ellipse cx="12" cy="11.6" rx="4.8" ry="2.1" fill="#c9cdd8" />
+          <ellipse cx="12" cy="8.2" rx="3.2" ry="1.8" fill="#ff8f4c" />
+        </svg>
+        <span>Cairn</span>
+      </a>
+
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#trails">Trails</a>
+        <a href="#speed">Speed</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <a class="btn primary small" href="https://github.com/sagarkori143/Cairn/releases/latest">
+        Download
+      </a>
+    </header>
+
+    <main id="top">
+      <!-- ------------------------------------------------------------ hero -->
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Windows · free · no installer</p>
+
+          <h1>Answers on your screen,<br />not in a chat window.</h1>
+
+          <p class="lede">
+            You are stuck on a settings page you have never seen before. Press
+            <span class="keys"><kbd>Ctrl</kbd><kbd>Space</kbd></span>, ask out loud, and Cairn points at the thing you
+            need — dimming the screen, landing a cursor on the control, and talking you
+            through it. On your real desktop, in whatever app you were already using.
+          </p>
+
+          <div class="cta">
+            <a class="btn primary" href="https://github.com/sagarkori143/Cairn/releases/latest">
+              Download for Windows
+            </a>
+            <a class="btn ghost" href="https://github.com/sagarkori143/Cairn">
+              Read the source
+            </a>
+          </div>
+
+          <p class="fineprint">
+            85&nbsp;MB · portable, no installer · delete the file to uninstall · Windows&nbsp;10
+            and&nbsp;11
+          </p>
+        </div>
+
+        <!-- A recreation of what Cairn draws, running live rather than a screenshot. -->
+        <div class="hero-demo">
+          <div class="demo" id="demo" aria-hidden="true">
+            <div class="desk">
+              <div class="desk-bar">
+                <span class="dotrow"><i></i><i></i><i></i></span>
+                <span class="desk-title">Billing — Northwind</span>
+                <span class="avatar" data-target="0"></span>
+              </div>
+
+              <div class="desk-body">
+                <aside class="desk-side">
+                  <span class="side-item">Overview</span>
+                  <span class="side-item" data-target="1">Billing</span>
+                  <span class="side-item">Members</span>
+                  <span class="side-item">Security</span>
+                </aside>
+
+                <div class="desk-main">
+                  <div class="field"><span class="label">Card on file</span><span class="value">•••• 4242</span></div>
+                  <div class="field"><span class="label">Billing address</span><span class="value">1 Harbour Rd</span></div>
+                  <div class="field"><span class="label">Invoices</span><span class="value">Monthly</span></div>
+                  <div class="field"><span class="label">Currency</span><span class="value">JPY</span></div>
+                  <div class="field"><span class="label">Tax ID</span><span class="value">Not set</span></div>
+                  <div class="field"><span class="label">Next charge</span><span class="value">1 August</span></div>
+                  <button class="desk-btn" data-target="2">Update payment method</button>
+                </div>
+              </div>
+
+              <!-- Everything below is Cairn, drawn over the app. -->
+              <div class="veil" id="veil"></div>
+              <div class="spot" id="spot"></div>
+              <div class="ring r1"></div>
+              <div class="ring r2"></div>
+              <div class="ring r3"></div>
+              <div class="pointdot" id="pointdot"></div>
+              <svg class="pointer" id="pointer" viewBox="0 0 24 24" width="26" height="26">
+                <path
+                  d="M5 2.5l13.4 7.9-5.9 1.6-2.5 5.9L5 2.5z"
+                  fill="#ff8f4c"
+                  stroke="rgba(8,9,13,0.85)"
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <div class="cap glass" id="cap"></div>
+            </div>
+          </div>
+
+          <p class="demo-note">Not a video — this is the overlay, rebuilt in the page.</p>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------- how it works -->
+      <section id="how" class="band">
+        <h2>Three seconds, start to finish</h2>
+
+        <div class="steps">
+          <article>
+            <span class="num">1</span>
+            <h3>Summon</h3>
+            <p>
+              <span class="keys"><kbd>Ctrl</kbd><kbd>Space</kbd></span> over whatever you are doing. Cairn captures that
+              screen — and excludes its own window from the shot, so it never ends up
+              answering questions about itself.
+            </p>
+          </article>
+
+          <article>
+            <span class="num">2</span>
+            <h3>Ask</h3>
+            <p>
+              Type it, or speak. Words appear as you say them rather than after you stop —
+              the audio streams while you are still talking, so you can see a
+              mistranscription before it becomes the question.
+            </p>
+          </article>
+
+          <article>
+            <span class="num">3</span>
+            <h3>Follow</h3>
+            <p>
+              The screen dims, a cursor lands on the control you need, and each step is
+              spoken with captions. <kbd>Esc</kbd> stops everything, immediately, from
+              wherever you are.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- trails -->
+      <section id="trails" class="band alt">
+        <div class="split">
+          <div>
+            <h2>The second person asks for free</h2>
+            <p class="body">
+              Most assistants answer the same question forever, and charge for it every
+              time. Cairn keeps the answer as a <em>trail</em> — the steps, not the
+              screenshot — and checks there first.
+            </p>
+            <p class="body">
+              When somebody on your team has already found the setting, the walkthrough
+              starts immediately and costs nothing. The model is only asked about things
+              nobody has solved yet.
+            </p>
+            <p class="body muted">
+              The name is the pile of stones hikers leave to mark a path for whoever comes
+              next.
+            </p>
+          </div>
+
+          <div class="compare">
+            <div class="compare-row">
+              <span class="compare-label">Already a trail</span>
+              <span class="bar moss" style="--w: 4%"></span>
+              <span class="compare-val moss-text">~0 ms</span>
+            </div>
+            <div class="compare-row">
+              <span class="compare-label">New question</span>
+              <span class="bar ember" style="--w: 100%"></span>
+              <span class="compare-val">~8 s</span>
+            </div>
+            <p class="compare-note">
+              Measured against the deployed API. Recall is a lookup; a new answer is a
+              screenshot, a vision model, and a set of coordinates.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------------- speed -->
+      <section id="speed" class="band">
+        <h2>Numbers, measured rather than claimed</h2>
+
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-num">68<small>ms</small></span>
+            <span class="stat-label">Click to something on screen</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">1.1<small>s</small></span>
+            <span class="stat-label">Until it is listening</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">2.5<small>s</small></span>
+            <span class="stat-label">First words back, mid-sentence</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">0<small>ms</small></span>
+            <span class="stat-label">A question already answered</span>
+          </div>
+        </div>
+
+        <p class="body centered muted">
+          The token and the screenshot are fetched before they are needed, so neither is
+          charged to the wait you notice.
+        </p>
+      </section>
+
+      <!-- --------------------------------------------------------- privacy -->
+      <section class="band alt">
+        <h2>What it does not do</h2>
+
+        <div class="cards">
+          <article class="card">
+            <h3>It is not watching</h3>
+            <p>
+              A screenshot is taken at the moment you ask, used for that one answer, and
+              not stored. Nothing is captured while you are not asking.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>It holds no keys</h3>
+            <p>
+              The API keys live on the server. The downloaded app has none in it, so
+              unpacking the executable gets you nothing worth having.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>It stays out of its own shot</h3>
+            <p>
+              The overlay is excluded from screen capture at the OS level. Without that,
+              the model reads Cairn's own window and answers about Cairn.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>It leaves nothing behind</h3>
+            <p>
+              One portable file, no installer, no registry writes unless you turn on
+              <em>Start with Windows</em> yourself. Delete it and it is gone.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------------- faq -->
+      <section id="faq" class="band">
+        <h2>Questions you will hit in the first minute</h2>
+
+        <div class="faq">
+          <details>
+            <summary>Windows says it can't verify the publisher.</summary>
+            <p>
+              It can't — the binary is unsigned, because a code-signing certificate costs
+              a few hundred dollars a year. Choose <strong>More info → Run anyway</strong>.
+              The source is public if you would rather build it yourself.
+            </p>
+          </details>
+
+          <details>
+            <summary>I pressed Ctrl+Space and nothing happened.</summary>
+            <p>
+              Ctrl+Space is also the IME toggle for Japanese, Chinese and Korean input. If
+              something already owns it, Cairn takes Ctrl+Shift+Space, then Alt+Space, then
+              Ctrl+Alt+C — and tells you which one it got, in the panel and in the tray
+              tooltip. If every one is taken, the tray icon still opens it.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it work in any app, or just a browser?</summary>
+            <p>
+              Any app. It is a desktop program, not an extension — it can see and draw on
+              Figma, Excel, a VPN client, an installer dialog. That is the reason it isn't
+              a web app.
+            </p>
+          </details>
+
+          <details>
+            <summary>I have two monitors.</summary>
+            <p>
+              It dims only the screen you asked on. The other one stays untouched, so
+              documentation open on a second display doesn't get greyed out because you
+              asked about the first.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it start with Windows?</summary>
+            <p>
+              Only if you ask it to, from the tray menu. A portable file that adds itself
+              to startup uninvited is not behaving like a portable file.
+            </p>
+          </details>
+
+          <details>
+            <summary>What does it cost?</summary>
+            <p>
+              Nothing to download. Questions are answered by a hosted API, and answers that
+              already exist as trails cost nothing to serve — which is most of them, once a
+              team has been using it for a while.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section class="closer">
+        <h2>Stop describing your screen to a chat box.</h2>
+        <a class="btn primary big" href="https://github.com/sagarkori143/Cairn/releases/latest">
+          Download for Windows
+        </a>
+        <p class="fineprint">Unsigned · 85 MB · portable</p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="foot-inner">
+        <span class="foot-brand">Cairn</span>
+        <nav>
+          <a href="https://github.com/sagarkori143/Cairn">Source</a>
+          <a href="https://github.com/sagarkori143/Cairn/releases/latest">Releases</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <span class="foot-note">Built by sagarkori143</span>
+      </div>
+    </footer>
+
+    <script src="demo.js"></script>
+  </body>
+</html>
