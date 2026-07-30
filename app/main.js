@@ -213,20 +213,17 @@ function createHud() {
   });
 
   /*
-   * Dismiss on blur so the panel never lingers over the app you moved on to.
+   * Nothing dismisses this but Escape.
    *
-   * Two exceptions, both cases where a blur does not mean what it usually
-   * means. During voice the panel is hidden deliberately and dismissing would
-   * take the session with it. And for a moment after appearing: focus does not
-   * always land where it is asked to — at launch it can go nowhere at all
-   * while Windows settles, and a panel that reads that as "they moved on"
-   * shows itself and puts itself away again, which is the flicker.
+   * It used to hide on blur, on the reasoning that losing focus meant you had
+   * moved on. That reasoning is exactly backwards for what this does: a
+   * walkthrough tells you to click something, and clicking it moves focus to
+   * the app being explained — so following the instruction cancelled the
+   * instructions, mid-sentence, with the cursor still pointing at the thing.
+   *
+   * Focus is a bad proxy for intent here. Escape is stated in the panel, works
+   * from anywhere, and stops everything at once; that is the way out.
    */
-  hud.on("blur", () => {
-    if (voiceMode) return;
-    if (Date.now() - shownAt < 900) return;
-    if (hud?.isVisible()) hideAll();
-  });
 }
 
 /**
@@ -285,8 +282,6 @@ let pendingShow = null;
 let hudLoaded = false;
 let summonWhenLoaded = false;
 let lastInk = null;
-/** When the panel last went on screen, so a blur arriving in its wake is ignored. */
-let shownAt = 0;
 
 function showHud() {
   if (!hud) return;
@@ -343,17 +338,29 @@ function revealHud() {
   pendingShow = null;
   if (!hud || hud.isVisible()) return;
 
-  shownAt = Date.now();
-  positionHud();
-  hud.showInactive(); // appear without stealing focus…
-  hud.focus(); // …then take it deliberately, so typing lands here
-  syncEscapeCapture();
+  /*
+   * A beat between the key and the panel.
+   *
+   * Appearing in the same frame as the keypress reads as a jump cut — the
+   * screen changes before the finger has finished moving. A short pause lets
+   * the entrance be seen as an entrance. It is small enough not to register as
+   * waiting, and the work that used to sit here — the token, the screenshot —
+   * has already been moved off this path.
+   */
+  setTimeout(() => {
+    if (!hud || hud.isVisible()) return;
 
-  // Now that it is actually on screen, let it play its entrance. The animation
-  // runs on load, which for a window that loads once and is shown many times
-  // means it plays to an empty screen and every summon after the first is a
-  // pop.
-  hud.webContents.send("cairn:shown");
+    positionHud();
+    hud.showInactive(); // appear without stealing focus…
+    hud.focus(); // …then take it deliberately, so typing lands here
+    syncEscapeCapture();
+
+    // Now that it is actually on screen, let it play its entrance. The
+    // animation runs on load, which for a window that loads once and is shown
+    // many times means it plays to an empty screen and every summon after the
+    // first is a pop.
+    hud.webContents.send("cairn:shown");
+  }, 30);
 }
 
 /**
