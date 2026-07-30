@@ -357,16 +357,36 @@ function revealHud() {
   setTimeout(() => {
     if (!hud || hud.isVisible()) return;
 
+    /*
+     * The window is made transparent before it is shown, and given back its
+     * alpha a couple of frames later.
+     *
+     * A hidden window keeps whatever it last painted. Chromium does not
+     * produce frames for it, so telling the renderer to blank itself while
+     * hidden changes the DOM and not the pixels — and showing the window
+     * presents that stale frame, the fully drawn panel from last time, for
+     * about one frame before the new one arrives.
+     *
+     * That is the flicker, and it is invisible to everything except the
+     * screen: sampling the pixels showed luminance jump to 35, fall back to
+     * the desktop's 25 twelve milliseconds later, and only then begin the
+     * fade. Window rectangles said it appeared once; computed opacity said it
+     * faded in cleanly. Both were describing intent rather than output.
+     */
+    hud.setOpacity(0);
     positionHud();
     hud.showInactive(); // appear without stealing focus…
     hud.focus(); // …then take it deliberately, so typing lands here
     syncEscapeCapture();
 
-    // Now that it is actually on screen, let it play its entrance. The
-    // animation runs on load, which for a window that loads once and is shown
-    // many times means it plays to an empty screen and every summon after the
-    // first is a pop.
-    hud.webContents.send("cairn:shown");
+    setTimeout(() => {
+      if (!hud) return;
+      hud.setOpacity(1);
+      // Only now, with the stale frame replaced, is there any point playing an
+      // entrance. The animation lives on a class rather than on load, because
+      // the window loads once and is shown many times.
+      hud.webContents.send("cairn:shown");
+    }, 40);
   }, 300);
 }
 
