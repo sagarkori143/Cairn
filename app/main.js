@@ -296,6 +296,10 @@ function showHud() {
   if (hud.isVisible()) {
     hud.focus();
     hud.webContents.send("cairn:summon");
+    // Both, and in this order. The summon clears the panel back to invisible
+    // ready to be faded in, so without the second message a hotkey pressed
+    // while it was already on screen would simply blank it.
+    hud.webContents.send("cairn:shown");
     return;
   }
 
