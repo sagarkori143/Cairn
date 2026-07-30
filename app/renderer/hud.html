@@ -33,9 +33,22 @@
        * inner highlight along the top edge (how real frosted surfaces catch
        * light), and a shadow deep enough to lift it off whatever is behind.
        */
+      /*
+       * The margin is the shadow's room to fall.
+       *
+       * The window is transparent and sized to its contents, so anything drawn
+       * outside it is simply cut off. A 90px shadow inside a 12px margin was
+       * clipped square by the window edge, which is why the panel had visible
+       * corners under it instead of a fade. The shadow is now smaller than the
+       * space around it — change one and check the other.
+       */
       #shell {
-        margin: 12px;
+        margin: 30px;
         border-radius: 26px;
+        /* Re-resolved here, not inherited from body: body's colour was already
+           computed against the dark palette, so without this the text stays
+           light when the panel turns light. */
+        color: var(--ink);
         /* Thinner tint over a heavier blur: the glass now carries more of the
            colour behind it and less of its own grey, which is what separates
            frosted glass from a dark panel with a blur behind it. */
@@ -46,8 +59,8 @@
         -webkit-backdrop-filter: blur(48px) saturate(200%);
         border: 1px solid rgba(255, 255, 255, 0.11);
         box-shadow:
-          0 40px 90px -20px rgba(0, 0, 0, 0.82),
-          0 2px 10px rgba(0, 0, 0, 0.4),
+          0 16px 40px -14px rgba(0, 0, 0, 0.8),
+          0 2px 8px rgba(0, 0, 0, 0.36),
           /* Light along the top edge, shadow along the bottom — a pane has
              thickness, and only lighting both edges shows it. */
           inset 0 1px 0 rgba(255, 255, 255, 0.16),
@@ -55,7 +68,37 @@
         overflow: hidden;
         -webkit-app-region: drag;
         animation: panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        transition: background 320ms ease, border-color 320ms ease, box-shadow 320ms ease;
       }
+
+      /*
+       * The same panel over a light background.
+       *
+       * Dark glass on a white document is a black slab, not glass. The tint
+       * inverts and the text with it — the variables are redeclared here so
+       * everything inside follows without each rule needing a twin.
+       */
+      #shell.light {
+        --ink: #14161c;
+        --muted: #4c5262;
+        --faint: #7c8296;
+        --line: rgba(12, 14, 20, 0.12);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.5)),
+          rgba(244, 246, 250, 0.42);
+        border-color: rgba(12, 14, 20, 0.12);
+        box-shadow:
+          0 16px 40px -14px rgba(12, 16, 28, 0.34),
+          0 2px 8px rgba(12, 16, 28, 0.14),
+          inset 0 1px 0 rgba(255, 255, 255, 0.9),
+          inset 0 -1px 0 rgba(12, 14, 20, 0.07);
+      }
+      #shell.light kbd { background: rgba(12, 14, 20, 0.05); }
+      #shell.light .btn { background: rgba(12, 14, 20, 0.055); border-color: rgba(12, 14, 20, 0.08); }
+      #shell.light .btn:hover:not(:disabled) { background: rgba(12, 14, 20, 0.1); }
+      #shell.light .btn.primary,
+      #shell.light #mic.recording { background: var(--ember); color: #1b1005; }
+      #shell.light .pip { background: rgba(12, 14, 20, 0.18); }
       @keyframes panel-in {
         from { opacity: 0; transform: translateY(14px) scale(0.975); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -267,7 +310,8 @@
        */
       function fit({ announce = false } = {}) {
         const send = () => {
-          window.cairn.resizeHud($("shell").offsetHeight + 24);
+          // + the margin on both sides, which is the shadow's room to fall.
+          window.cairn.resizeHud($("shell").offsetHeight + 60);
           if (announce) window.cairn.hudReady();
         };
 
@@ -930,6 +974,12 @@
       // The same key, arriving from the main process for the times this window
       // is hidden or unfocused and never sees the keystroke itself.
       window.cairn.onEscape(() => closeEverything());
+
+      // Dark glass over a white document is a slab, not glass. Main samples
+      // what is actually behind the panel and says which way to lean.
+      window.cairn.onBackdrop(({ light }) => {
+        $("shell").classList.toggle("light", Boolean(light));
+      });
 
       /** Stop everything: voice, walkthrough, overlay, panel. */
       function closeEverything() {

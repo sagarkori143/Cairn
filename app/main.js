@@ -171,17 +171,18 @@ function createOverlay() {
   // windows, so it isn't hidden by other floating panels.
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  // Keep Cairn out of Cairn's own screenshots — see captureActiveScreen.
-  overlay.setContentProtection(true);
+  // Left capturable on purpose, and switched off only for the instant a frame
+  // is taken — see withCairnHiddenFromCapture.
   overlay.loadFile(path.join(__dirname, "renderer", "overlay.html"));
 }
 
 function createHud() {
   hud = new BrowserWindow({
-    width: 760,
+    // 736 of panel plus the 30px margin each side that the shadow falls into.
+    width: 796,
     // Close to the ask bar's real height; fit() corrects it once the renderer
     // has measured itself, and starting near the answer avoids a visible jump.
-    height: 200,
+    height: 236,
     frame: false,
     transparent: true,
     resizable: false,
@@ -192,9 +193,6 @@ function createHud() {
     webPreferences: { preload: path.join(__dirname, "preload.js") },
   });
   hud.setAlwaysOnTop(true, "screen-saver");
-  // The HUD must never appear in a capture, or the model answers about Cairn
-  // instead of the app underneath it.
-  hud.setContentProtection(true);
   hud.loadFile(path.join(__dirname, "renderer", "hud.html"));
 
   // Dismiss on blur so the HUD never lingers over the app you moved on to —
@@ -286,6 +284,68 @@ function revealHud() {
   hud.showInactive(); // appear without stealing focus…
   hud.focus(); // …then take it deliberately, so typing lands here
   syncEscapeCapture();
+
+  // Deliberately after showing, not before: sampling costs a screen grab, and
+  // charging that to the summon would undo the work that got it to 68ms. The
+  // panel appears immediately and settles into the right shade a moment later.
+  readBackdrop();
+}
+
+/**
+ * Works out whether the panel is sitting on something light or something dark.
+ *
+ * Dark glass on a dark editor is nearly invisible; the same glass over a white
+ * document is a black slab. Rather than pick one and lose half the time, the
+ * pixels behind the panel are sampled and the glass is told which way to go.
+ *
+ * The sample is taken with Cairn hidden from capture, or the panel would be
+ * measuring itself and always report its own darkness.
+ */
+async function readBackdrop() {
+  if (!hud?.isVisible()) return;
+
+  try {
+    const display = activeDisplay();
+    const shot = await withCairnHiddenFromCapture(async () => {
+      const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 480, height: 300 },
+      });
+      return sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
+    });
+    if (!shot || !hud?.isVisible()) return;
+
+    // Where the panel sits, as a fraction of the display, then in thumbnail px.
+    const b = hud.getBounds();
+    const d = display.bounds;
+    const size = shot.thumbnail.getSize();
+    const rect = {
+      x: Math.round(((b.x - d.x) / d.width) * size.width),
+      y: Math.round(((b.y - d.y) / d.height) * size.height),
+      width: Math.round((b.width / d.width) * size.width),
+      height: Math.round((b.height / d.height) * size.height),
+    };
+
+    // A panel half off-screen would crop to nothing and throw.
+    rect.x = Math.max(0, Math.min(rect.x, size.width - 2));
+    rect.y = Math.max(0, Math.min(rect.y, size.height - 2));
+    rect.width = Math.max(2, Math.min(rect.width, size.width - rect.x));
+    rect.height = Math.max(2, Math.min(rect.height, size.height - rect.y));
+
+    const bmp = shot.thumbnail.crop(rect).toBitmap(); // BGRA
+    let sum = 0;
+    for (let i = 0; i < bmp.length; i += 4) {
+      sum += 0.114 * bmp[i] + 0.587 * bmp[i + 1] + 0.299 * bmp[i + 2];
+    }
+    const luma = sum / (bmp.length / 4);
+
+    // Well above mid-grey before going light: the dark treatment holds up on a
+    // medium background, and flipping back and forth around a knife edge every
+    // time the panel opens would be worse than being slightly wrong.
+    hud.webContents.send("cairn:backdrop", { light: luma > 150, luma: Math.round(luma) });
+  } catch {
+    /* the panel has a perfectly good default — never fail a summon over this */
+  }
 }
 
 function hideAll() {
@@ -337,14 +397,42 @@ function syncEscapeCapture() {
  * work — pointing its own cursor at its own window. Two independent defences,
  * because one silently failing would be hard to notice:
  *
- *   1. setContentProtection excludes these windows from capture at the OS
- *      level (WDA_EXCLUDEFROMCAPTURE on Windows 10 2004+). No flicker; the
- *      windows stay visible to you and are simply absent from the frame.
+ *   1. Content protection is switched on for the instant the frame is taken,
+ *      excluding these windows at the OS level (WDA_EXCLUDEFROMCAPTURE on
+ *      Windows 10 2004+). No flicker; they stay visible to you and are simply
+ *      absent from the frame.
  *   2. The overlay is hidden outright before the shot. It is a full-desktop
  *      dimming layer, so if defence 1 ever regressed on an older build, it
  *      wouldn't just add a stray window — it would darken the entire capture
  *      and wreck the model's reading of it.
  */
+/**
+ * Makes Cairn invisible to capture for exactly as long as `grab` takes.
+ *
+ * Content protection used to be permanent, which kept Cairn out of the model's
+ * screenshots and out of everybody's screen recordings at the same time — so a
+ * recording of the product showed a walkthrough happening to an empty desktop,
+ * with the thing doing it missing from the video. Those are different needs
+ * pretending to be one: the frame sent to a model must not contain Cairn, and
+ * a recording must.
+ *
+ * So it is off by default, and switched on around the grab. The wait is for the
+ * compositor: the flag is set on the window immediately, but a frame already in
+ * flight can still carry the old contents.
+ */
+async function withCairnHiddenFromCapture(grab) {
+  overlay?.setContentProtection(true);
+  hud?.setContentProtection(true);
+  await new Promise((r) => setTimeout(r, 80));
+
+  try {
+    return await grab();
+  } finally {
+    overlay?.setContentProtection(false);
+    hud?.setContentProtection(false);
+  }
+}
+
 async function captureActiveScreen() {
   const display = activeDisplay();
 
@@ -362,15 +450,17 @@ async function captureActiveScreen() {
   if (hideForShot) await new Promise((r) => setTimeout(r, 90));
 
   try {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: {
-        // Cap the long edge: a raw 4K frame is several megabytes and buys no
-        // accuracy, since UI text stays legible well below native resolution.
-        width: Math.min(display.size.width, 1600),
-        height: Math.min(display.size.height, 1000),
-      },
-    });
+    const sources = await withCairnHiddenFromCapture(() =>
+      desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: {
+          // Cap the long edge: a raw 4K frame is several megabytes and buys no
+          // accuracy, since UI text stays legible well below native resolution.
+          width: Math.min(display.size.width, 1600),
+          height: Math.min(display.size.height, 1000),
+        },
+      }),
+    );
 
     const match =
       sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
