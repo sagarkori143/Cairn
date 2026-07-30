@@ -195,6 +195,23 @@ function createHud() {
   hud.setAlwaysOnTop(true, "screen-saver");
   hud.loadFile(path.join(__dirname, "renderer", "hud.html"));
 
+  /*
+   * Nothing is summoned before the renderer can hear it.
+   *
+   * On launch the panel was asked to appear in the same breath as being
+   * created, so the summon arrived at a document that had not run its script
+   * yet and no listener caught it. The fallback timer then showed the panel at
+   * its creation height, the renderer finished loading, measured itself, and
+   * resized in full view — appear, jump, settle.
+   */
+  hud.webContents.once("did-finish-load", () => {
+    hudLoaded = true;
+    if (summonWhenLoaded) {
+      summonWhenLoaded = false;
+      showHud();
+    }
+  });
+
   // Dismiss on blur so the HUD never lingers over the app you moved on to —
   // except during voice, where the panel is hidden deliberately and losing it
   // to a blur would take the whole session with it.
@@ -257,9 +274,18 @@ function positionHud() {
  * size is final.
  */
 let pendingShow = null;
+let hudLoaded = false;
+let summonWhenLoaded = false;
 
 function showHud() {
   if (!hud) return;
+
+  // Too early — the renderer cannot reset or measure itself yet, and showing
+  // it now means doing both afterwards where they can be seen.
+  if (!hudLoaded) {
+    summonWhenLoaded = true;
+    return;
+  }
 
   if (hud.isVisible()) {
     hud.focus();

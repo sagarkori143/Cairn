@@ -49,14 +49,22 @@
            computed against the dark palette, so without this the text stays
            light when the panel turns light. */
         color: var(--ink);
-        /* Thinner tint over a heavier blur: the glass now carries more of the
-           colour behind it and less of its own grey, which is what separates
-           frosted glass from a dark panel with a blur behind it. */
+        /*
+         * Tinted for the background it will actually sit on.
+         *
+         * Now that the panel takes the opposite side, the dark treatment is
+         * the one that appears over light screens — and at the old 0.55 a
+         * white page came through hard enough to leave it mid-grey, with pale
+         * text on pale glass. Each theme is set for its own case: enough tint
+         * to hold text, enough left over to still be glass. Roughly a quarter
+         * of what is behind comes through, blurred and saturated, which is
+         * what keeps it from reading as a solid card.
+         */
         background:
-          linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.02)),
-          rgba(14, 16, 22, 0.55);
-        backdrop-filter: blur(48px) saturate(200%);
-        -webkit-backdrop-filter: blur(48px) saturate(200%);
+          linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015)),
+          rgba(12, 14, 20, 0.74);
+        backdrop-filter: blur(46px) saturate(210%);
+        -webkit-backdrop-filter: blur(46px) saturate(210%);
         border: 1px solid rgba(255, 255, 255, 0.11);
         box-shadow:
           0 16px 40px -14px rgba(0, 0, 0, 0.8),
@@ -83,10 +91,13 @@
         --muted: #4c5262;
         --faint: #7c8296;
         --line: rgba(12, 14, 20, 0.12);
+        /* The mirror of the above: this one lands on dark screens, so it needs
+           enough white to actually read as light rather than as grey — while
+           still letting the blur behind it show. */
         background:
-          linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.5)),
-          rgba(244, 246, 250, 0.42);
-        border-color: rgba(12, 14, 20, 0.12);
+          linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.16)),
+          rgba(248, 250, 255, 0.62);
+        border-color: rgba(12, 14, 20, 0.14);
         box-shadow:
           0 16px 40px -14px rgba(12, 16, 28, 0.34),
           0 2px 8px rgba(12, 16, 28, 0.14),
