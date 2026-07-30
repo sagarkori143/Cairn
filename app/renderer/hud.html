@@ -77,9 +77,20 @@
           inset 0 -1px 0 rgba(0, 0, 0, 0.28);
         overflow: hidden;
         -webkit-app-region: drag;
-        /* Played by class, not on load. The window loads once and is shown
-           many times, so an entrance tied to load runs to a hidden screen and
-           every summon after the first arrives as a pop. */
+        /*
+         * Invisible until told to enter, and that default is the whole point.
+         *
+         * The entrance is played by class rather than on load, because the
+         * window loads once and is shown many times. But adding the class
+         * after the window is already on screen meant the panel was painted
+         * at full opacity first and snapped to zero when the class landed
+         * thirteen milliseconds later — measured, not guessed — then faded in.
+         * Appear, vanish, fade in: the flicker.
+         *
+         * Resting at zero means the first frame the window ever shows is
+         * already blank, and the only thing anyone sees is the fade.
+         */
+        opacity: 0;
         transition: border-color 320ms ease, box-shadow 320ms ease, color 260ms ease;
       }
       #shell.entering { animation: panel-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1027,8 +1038,7 @@
       // once when the document loaded behind a hidden window.
       window.cairn.onShown(() => {
         const shell = $("shell");
-        shell.classList.remove("entering");
-        void shell.offsetWidth; // restart the animation rather than ignore it
+        void shell.offsetWidth; // start the animation rather than ignore it
         shell.classList.add("entering");
       });
 
@@ -1065,6 +1075,13 @@
         // Speak is one click away from here — have the credential ready before
         // it is asked for.
         prefetchListenToken();
+
+        // Back to invisible while still hidden, ready to be faded in once the
+        // window is actually on screen. Doing this on the way in rather than on
+        // the way out means a summon that never completes cannot leave the
+        // panel blank.
+        $("shell").classList.remove("entering");
+
         // Reset done. Tell main the panel is the size it will actually be, so
         // it can be put on screen already settled rather than resizing in view.
         fit({ announce: true });

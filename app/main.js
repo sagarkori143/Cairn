@@ -339,13 +339,16 @@ function revealHud() {
   if (!hud || hud.isVisible()) return;
 
   /*
-   * A beat between the key and the panel.
+   * A pause between the key and the panel.
    *
-   * Appearing in the same frame as the keypress reads as a jump cut — the
-   * screen changes before the finger has finished moving. A short pause lets
-   * the entrance be seen as an entrance. It is small enough not to register as
-   * waiting, and the work that used to sit here — the token, the screenshot —
-   * has already been moved off this path.
+   * Partly so the entrance reads as an entrance rather than a jump cut, and
+   * partly to let everything that happens on the way in — the reset, the
+   * resize, the ink from the backdrop reading — land while there is still
+   * nothing on screen to see it happen to. Anything that arrives after the
+   * panel is up is a change the eye catches as a flicker.
+   *
+   * Nothing is waiting behind this: the token and the screenshot were moved
+   * off this path earlier, so the cost is exactly the number below.
    */
   setTimeout(() => {
     if (!hud || hud.isVisible()) return;
@@ -360,7 +363,7 @@ function revealHud() {
     // many times means it plays to an empty screen and every summon after the
     // first is a pop.
     hud.webContents.send("cairn:shown");
-  }, 30);
+  }, 300);
 }
 
 /**
