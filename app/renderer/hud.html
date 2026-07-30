@@ -835,9 +835,34 @@
 
           if (!heard) return failVoice("Didn't catch that — try again, or type it.");
           q.value = heard;
-          startThinkingWords();
+
+          /*
+           * The question goes now; the screen catches up afterwards.
+           *
+           * Replacing the sentence with "Looking at your screen…" the instant
+           * you stopped talking made the wait start at the earliest possible
+           * moment — and the first thing it did was take away the one thing
+           * worth reading, which is whether it heard you correctly.
+           *
+           * The request is already in flight while the sentence sits there, so
+           * this costs nothing: the second or so spent reading it back is time
+           * the model was going to spend anyway. It also puts the check for a
+           * mistranscription where it belongs, before the answer rather than
+           * after it.
+           */
           ask({ fromVoice: true, frame: framePromise });
           framePromise = null;
+
+          window.cairn.stage({ kind: "heard", text: heard, hint: "Got it", ...voiceScreen });
+
+          const mine = flowId;
+          setTimeout(() => {
+            // Escape, or an answer that came back inside the pause — a recalled
+            // trail returns in milliseconds, and narrating a wait that already
+            // ended would put status words over the walkthrough.
+            if (mine !== flowId || !busy) return;
+            startThinkingWords();
+          }, 1300);
         };
 
         /*
@@ -975,10 +1000,10 @@
       // is hidden or unfocused and never sees the keystroke itself.
       window.cairn.onEscape(() => closeEverything());
 
-      // Dark glass over a white document is a slab, not glass. Main samples
-      // what is actually behind the panel and says which way to lean.
-      window.cairn.onBackdrop(({ light }) => {
-        $("shell").classList.toggle("light", Boolean(light));
+      // Main samples what is behind the panel and picks the opposite side, so
+      // the panel is found immediately rather than blending into the screen.
+      window.cairn.onBackdrop(({ panel }) => {
+        $("shell").classList.toggle("light", panel === "light");
       });
 
       /** Stop everything: voice, walkthrough, overlay, panel. */

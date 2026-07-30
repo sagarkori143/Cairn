@@ -294,12 +294,13 @@ function revealHud() {
 /**
  * Works out whether the panel is sitting on something light or something dark.
  *
- * Dark glass on a dark editor is nearly invisible; the same glass over a white
- * document is a black slab. Rather than pick one and lose half the time, the
- * pixels behind the panel are sampled and the glass is told which way to go.
+ * The panel takes the opposite side to whatever is behind it: light glass over
+ * a dark editor, dark glass over a white document. Matching the background
+ * keeps text legible but lets the panel sink into the screen, and this is a
+ * thing that appears for a few seconds and has to be found immediately.
  *
  * The sample is taken with Cairn hidden from capture, or the panel would be
- * measuring itself and always report its own darkness.
+ * measuring itself and reporting its own tint back.
  */
 async function readBackdrop() {
   if (!hud?.isVisible()) return;
@@ -339,10 +340,14 @@ async function readBackdrop() {
     }
     const luma = sum / (bmp.length / 4);
 
-    // Well above mid-grey before going light: the dark treatment holds up on a
-    // medium background, and flipping back and forth around a knife edge every
-    // time the panel opens would be worse than being slightly wrong.
-    hud.webContents.send("cairn:backdrop", { light: luma > 150, luma: Math.round(luma) });
+    // Opposite of the backdrop. The threshold sits below mid-grey so a merely
+    // dim background — a grey IDE, a photo — keeps the dark panel rather than
+    // flipping to bright glass at the slightest excuse; only genuinely dark
+    // surroundings get the light treatment.
+    hud.webContents.send("cairn:backdrop", {
+      panel: luma < 96 ? "light" : "dark",
+      luma: Math.round(luma),
+    });
   } catch {
     /* the panel has a perfectly good default — never fail a summon over this */
   }
