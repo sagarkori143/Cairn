@@ -50,21 +50,23 @@
            light when the panel turns light. */
         color: var(--ink);
         /*
-         * Tinted for the background it will actually sit on.
+         * One material, whatever is behind it.
          *
-         * Now that the panel takes the opposite side, the dark treatment is
-         * the one that appears over light screens — and at the old 0.55 a
-         * white page came through hard enough to leave it mid-grey, with pale
-         * text on pale glass. Each theme is set for its own case: enough tint
-         * to hold text, enough left over to still be glass. Roughly a quarter
-         * of what is behind comes through, blurred and saturated, which is
-         * what keeps it from reading as a solid card.
+         * Tinting it dark over light screens and light over dark ones kept
+         * text readable but produced two different cards rather than one piece
+         * of glass — the tint, not the blur, became the thing you noticed.
+         * This is barely tinted at all: a heavy blur, saturation pushed so the
+         * colour behind carries through rather than going grey, and edges that
+         * do the defining. Legibility is handled by the lettering instead.
          */
-        background:
-          linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015)),
-          rgba(12, 14, 20, 0.74);
-        backdrop-filter: blur(46px) saturate(210%);
-        -webkit-backdrop-filter: blur(46px) saturate(210%);
+        /* A cool scrim rather than a neutral one. It is the same layer in both
+           modes, but it tempers a bright saturated backdrop enough for light
+           text to hold, while leaving a pale screen pale enough for dark text.
+           At 215% saturation and no scrim, a magenta glow came through hard
+           enough to swallow the placeholder. */
+        background: rgba(64, 70, 90, 0.22);
+        backdrop-filter: blur(44px) saturate(185%);
+        -webkit-backdrop-filter: blur(44px) saturate(185%);
         border: 1px solid rgba(255, 255, 255, 0.11);
         box-shadow:
           0 16px 40px -14px rgba(0, 0, 0, 0.8),
@@ -75,41 +77,45 @@
           inset 0 -1px 0 rgba(0, 0, 0, 0.28);
         overflow: hidden;
         -webkit-app-region: drag;
-        animation: panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        transition: background 320ms ease, border-color 320ms ease, box-shadow 320ms ease;
+        /* Played by class, not on load. The window loads once and is shown
+           many times, so an entrance tied to load runs to a hidden screen and
+           every summon after the first arrives as a pop. */
+        transition: border-color 320ms ease, box-shadow 320ms ease, color 260ms ease;
       }
+      #shell.entering { animation: panel-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
       /*
-       * The same panel over a light background.
+       * Dark lettering, for when the glass is sitting on a bright screen.
        *
-       * Dark glass on a white document is a black slab, not glass. The tint
-       * inverts and the text with it — the variables are redeclared here so
-       * everything inside follows without each rule needing a twin.
+       * The material is unchanged — only the ink and the few surfaces drawn
+       * with white at low alpha, which vanish against a light backdrop. The
+       * shadow under the text is what carries it over a busy background, since
+       * a nearly-clear panel offers very little of its own to sit on.
        */
-      #shell.light {
-        --ink: #14161c;
-        --muted: #4c5262;
-        --faint: #7c8296;
-        --line: rgba(12, 14, 20, 0.12);
-        /* The mirror of the above: this one lands on dark screens, so it needs
-           enough white to actually read as light rather than as grey — while
-           still letting the blur behind it show. */
-        background:
-          linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.16)),
-          rgba(248, 250, 255, 0.62);
-        border-color: rgba(12, 14, 20, 0.14);
+      #shell.ink-dark {
+        --ink: #0f1117;
+        --muted: #333a49;
+        --faint: #5a6273;
+        --line: rgba(12, 14, 20, 0.14);
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+        border-color: rgba(255, 255, 255, 0.5);
         box-shadow:
-          0 16px 40px -14px rgba(12, 16, 28, 0.34),
-          0 2px 8px rgba(12, 16, 28, 0.14),
-          inset 0 1px 0 rgba(255, 255, 255, 0.9),
-          inset 0 -1px 0 rgba(12, 14, 20, 0.07);
+          0 16px 40px -14px rgba(12, 16, 28, 0.4),
+          0 2px 8px rgba(12, 16, 28, 0.16),
+          inset 0 1px 0 rgba(255, 255, 255, 0.6),
+          inset 0 -1px 0 rgba(12, 14, 20, 0.08);
       }
-      #shell.light kbd { background: rgba(12, 14, 20, 0.05); }
-      #shell.light .btn { background: rgba(12, 14, 20, 0.055); border-color: rgba(12, 14, 20, 0.08); }
-      #shell.light .btn:hover:not(:disabled) { background: rgba(12, 14, 20, 0.1); }
-      #shell.light .btn.primary,
-      #shell.light #mic.recording { background: var(--ember); color: #1b1005; }
-      #shell.light .pip { background: rgba(12, 14, 20, 0.18); }
+      #shell.ink-dark kbd { background: rgba(12, 14, 20, 0.07); border-color: rgba(12, 14, 20, 0.14); }
+      #shell.ink-dark .btn { background: rgba(255, 255, 255, 0.34); border-color: rgba(12, 14, 20, 0.1); }
+      #shell.ink-dark .btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.55); }
+      #shell.ink-dark .btn.primary,
+      #shell.ink-dark #mic.recording { background: var(--ember); color: #1b1005; text-shadow: none; }
+      #shell.ink-dark .pip { background: rgba(12, 14, 20, 0.22); }
+
+      /* The default, for glass on a dark screen: light ink, and a dark shadow
+         under it for the same reason. */
+      #shell { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.62); }
+      #shell .btn.primary, #shell #mic.recording { text-shadow: none; }
       @keyframes panel-in {
         from { opacity: 0; transform: translateY(14px) scale(0.975); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -1011,10 +1017,19 @@
       // is hidden or unfocused and never sees the keystroke itself.
       window.cairn.onEscape(() => closeEverything());
 
-      // Main samples what is behind the panel and picks the opposite side, so
-      // the panel is found immediately rather than blending into the screen.
-      window.cairn.onBackdrop(({ panel }) => {
-        $("shell").classList.toggle("light", panel === "light");
+      // Main samples what is behind the panel. Only the lettering follows it —
+      // the glass is the same glass on any screen.
+      window.cairn.onBackdrop(({ ink }) => {
+        $("shell").classList.toggle("ink-dark", ink === "dark");
+      });
+
+      // Replayed every time the panel is genuinely put on screen, rather than
+      // once when the document loaded behind a hidden window.
+      window.cairn.onShown(() => {
+        const shell = $("shell");
+        shell.classList.remove("entering");
+        void shell.offsetWidth; // restart the animation rather than ignore it
+        shell.classList.add("entering");
       });
 
       /** Stop everything: voice, walkthrough, overlay, panel. */

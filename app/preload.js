@@ -77,6 +77,13 @@ contextBridge.exposeInMainWorld("cairn", {
   /** Reset and measured — safe to put the panel on screen now. */
   hudReady: () => ipcRenderer.send("cairn:hud-ready"),
 
+  /** The panel is now genuinely on screen — time to play its entrance. */
+  onShown: (fn) => {
+    const h = () => fn();
+    ipcRenderer.on("cairn:shown", h);
+    return () => ipcRenderer.off("cairn:shown", h);
+  },
+
   /** Whether the panel is currently sitting on a light or a dark background. */
   onBackdrop: (fn) => {
     const h = (_e, payload) => fn(payload);

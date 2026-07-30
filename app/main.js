@@ -212,11 +212,19 @@ function createHud() {
     }
   });
 
-  // Dismiss on blur so the HUD never lingers over the app you moved on to —
-  // except during voice, where the panel is hidden deliberately and losing it
-  // to a blur would take the whole session with it.
+  /*
+   * Dismiss on blur so the panel never lingers over the app you moved on to.
+   *
+   * Two exceptions, both cases where a blur does not mean what it usually
+   * means. During voice the panel is hidden deliberately and dismissing would
+   * take the session with it. And for a moment after appearing: focus does not
+   * always land where it is asked to — at launch it can go nowhere at all
+   * while Windows settles, and a panel that reads that as "they moved on"
+   * shows itself and puts itself away again, which is the flicker.
+   */
   hud.on("blur", () => {
     if (voiceMode) return;
+    if (Date.now() - shownAt < 900) return;
     if (hud?.isVisible()) hideAll();
   });
 }
@@ -276,6 +284,9 @@ function positionHud() {
 let pendingShow = null;
 let hudLoaded = false;
 let summonWhenLoaded = false;
+let lastInk = null;
+/** When the panel last went on screen, so a blur arriving in its wake is ignored. */
+let shownAt = 0;
 
 function showHud() {
   if (!hud) return;
@@ -293,6 +304,32 @@ function showHud() {
     return;
   }
 
+  // Placed before it is sampled, or the reading comes from wherever the panel
+  // happened to be last time. Positioning a hidden window costs nothing, and
+  // revealHud does it again on the way in.
+  positionHud();
+
+  /*
+   * Last time's answer, applied before this one is on screen.
+   *
+   * Sampling takes a few hundred milliseconds, so styling only on the result
+   * meant the panel appeared in one state and changed into another once the
+   * reading landed — which is a flicker, and was the one people saw. The
+   * backdrop behind a panel is nearly always what it was last time, so that is
+   * assumed up front and corrected silently if it turns out to have changed.
+   */
+  if (lastInk) hud.webContents.send("cairn:backdrop", { ink: lastInk });
+
+  // Started here, before the panel is on screen, and deliberately not awaited.
+  //
+  // It used to run just after revealing, wrapped in the same content-protection
+  // toggle the screenshots use — and flipping that flag on a window that has
+  // just appeared makes Windows recompose it, which is the flicker that looked
+  // like the panel arriving twice. Grabbing the frame while the panel is still
+  // hidden needs no flag at all, and the frame is the honest one: what is
+  // behind the panel, rather than the panel.
+  readBackdrop();
+
   hud.webContents.send("cairn:summon");
 
   // A missing reply must never leave the panel unopenable, so this is a
@@ -306,43 +343,47 @@ function revealHud() {
   pendingShow = null;
   if (!hud || hud.isVisible()) return;
 
+  shownAt = Date.now();
   positionHud();
   hud.showInactive(); // appear without stealing focus…
   hud.focus(); // …then take it deliberately, so typing lands here
   syncEscapeCapture();
 
-  // Deliberately after showing, not before: sampling costs a screen grab, and
-  // charging that to the summon would undo the work that got it to 68ms. The
-  // panel appears immediately and settles into the right shade a moment later.
-  readBackdrop();
+  // Now that it is actually on screen, let it play its entrance. The animation
+  // runs on load, which for a window that loads once and is shown many times
+  // means it plays to an empty screen and every summon after the first is a
+  // pop.
+  hud.webContents.send("cairn:shown");
 }
 
 /**
  * Works out whether the panel is sitting on something light or something dark.
  *
- * The panel takes the opposite side to whatever is behind it: light glass over
- * a dark editor, dark glass over a white document. Matching the background
- * keeps text legible but lets the panel sink into the screen, and this is a
- * thing that appears for a few seconds and has to be found immediately.
- *
- * The sample is taken with Cairn hidden from capture, or the panel would be
- * measuring itself and reporting its own tint back.
+ * The glass itself never changes — only the lettering on it does. Tinting the
+ * material light or dark to suit the background made it stop reading as glass
+ * and start reading as two different cards, so the panel stays one piece of
+ * frosted material that takes its colour from whatever is behind it, and the
+ * text switches shade to stay legible on top.
  */
 async function readBackdrop() {
-  if (!hud?.isVisible()) return;
+  if (!hud) return;
 
   try {
     const display = activeDisplay();
-    const shot = await withCairnHiddenFromCapture(async () => {
-      const sources = await desktopCapturer.getSources({
-        types: ["screen"],
-        thumbnailSize: { width: 480, height: 300 },
-      });
-      return sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
-    });
-    if (!shot || !hud?.isVisible()) return;
 
-    // Where the panel sits, as a fraction of the display, then in thumbnail px.
+    // No content-protection flag here: this is called while the panel is
+    // hidden, so the frame already excludes it, and toggling the flag on a
+    // window that is on screen makes Windows recompose it visibly.
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 480, height: 300 },
+    });
+    const shot =
+      sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
+    if (!shot || !hud) return;
+
+    // Where the panel will sit, as a fraction of the display, then in
+    // thumbnail px. positionHud has already placed it, even while hidden.
     const b = hud.getBounds();
     const d = display.bounds;
     const size = shot.thumbnail.getSize();
@@ -366,14 +407,11 @@ async function readBackdrop() {
     }
     const luma = sum / (bmp.length / 4);
 
-    // Opposite of the backdrop. The threshold sits below mid-grey so a merely
-    // dim background — a grey IDE, a photo — keeps the dark panel rather than
-    // flipping to bright glass at the slightest excuse; only genuinely dark
-    // surroundings get the light treatment.
-    hud.webContents.send("cairn:backdrop", {
-      panel: luma < 96 ? "light" : "dark",
-      luma: Math.round(luma),
-    });
+    // Only the lettering changes. The material stays the same piece of glass
+    // whatever is behind it — swapping its tint was the thing that stopped it
+    // looking like glass at all.
+    lastInk = luma > 132 ? "dark" : "light";
+    hud.webContents.send("cairn:backdrop", { ink: lastInk, luma: Math.round(luma) });
   } catch {
     /* the panel has a perfectly good default — never fail a summon over this */
   }
